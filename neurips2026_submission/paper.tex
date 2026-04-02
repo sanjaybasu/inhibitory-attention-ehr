@@ -17,6 +17,7 @@
 \usepackage{multirow}
 \usepackage{array}
 \usepackage{enumitem}
+\usepackage{float}
 
 % \answerYes, \answerNo, \answerNA, \answerTODO defined by neurips_2026.sty
 % Add \answerPartial not in official sty
@@ -182,6 +183,7 @@ are evicted, exacerbating CLitM. Query-conditioned selection methods---SeleCom
 Sentinel~\cite{zhang2025sentinel} (attention-probing-based compression)---share
 the relevance-driven framing that QCCS adopts, but have not been evaluated for
 positional bias correction in clinical EHR contexts.
+Complementary strategies---goal-conditioned pruning~\cite{wang2026swepruner}, active retrieval with global memory~\cite{qian2025memorag}, attribution-guided compression~\cite{gao2026aif}, and parametric memory~\cite{lu2026locas}---have not been applied to CLitM in clinical EHR.
 
 \paragraph{Dense retrieval.}
 DPR~\cite{karpukhin2020dpr} demonstrated that dense bi-encoder retrievers
@@ -399,12 +401,17 @@ accuracy exhibits a pronounced U-shaped curve as a function of answer position
 (Figure~\ref{fig:ucurve}). Peak accuracy of 59.5\% [95\% bootstrap CI: 52.4,
 66.7] is observed at the 20--30\% position decile. Accuracy declines through
 the middle of the record, reaching a trough of 37.6\% [31.2, 44.6] at the
-70--80\% position decile---a gap of \textbf{21.9 percentage points}. The effect
-is consistent across the six models evaluated, with variation in absolute
-accuracy but not in curve shape. Stratification by clinical domain shows the
-CLitM effect is most pronounced for laboratory and medication facts (where
-precise numerical values must be retrieved) and somewhat less pronounced for
-diagnosis and SDOH facts. Examining the spatial distribution of reference
+70--80\% position decile---a \textbf{peak-to-trough gap of 21.9 percentage points}
+(consistent with \citealt{liu2024lost} who report 15--25~pp using the same metric).
+Average accuracy in middle-position instructions (30--70\% of EHR timeline) is
+43.2\% versus 45.2\% in edge instructions---a 2.0~pp directional gap that
+confirms systematic positional disadvantage for mid-timeline content even after
+averaging out the outlier peak at 20--30\%.
+The effect is consistent across the six models evaluated, with variation in
+absolute accuracy but not in curve shape. Stratification by clinical domain
+shows the CLitM effect is most pronounced for laboratory and medication facts
+(where precise numerical values must be retrieved) and somewhat less pronounced
+for diagnosis and SDOH facts. Examining the spatial distribution of reference
 answers, 67.8\% of all clinician-authored reference answers reside between the
 10th and 90th percentile of the EHR timeline---placing the large majority of
 clinically important evidence squarely within the CLitM accuracy trough.
@@ -955,7 +962,7 @@ in the main paper's Table~\ref{tab:qccsgate} (34.9\%/23.3\%) because the
 ablation uses the pre-deduplication test population; the direction and magnitude
 of the query conditioning effect are robust across both analyses.
 
-\begin{table}[h]
+\begin{table}[H]
 \centering
 \caption{No-query ablation at $k{=}20$: QCCS gate with and without query
   conditioning (full test population, $N{=}690$ rows before deduplication).}
