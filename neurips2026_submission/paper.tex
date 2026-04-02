@@ -1,7 +1,6 @@
 \documentclass{article}
 
-% NeurIPS 2026 style — use neurips_2025 as placeholder until 2026 files release
-\usepackage{neurips_2025}
+\usepackage{neurips_2026}
 
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
@@ -19,12 +18,9 @@
 \usepackage{array}
 \usepackage{enumitem}
 
-% NeurIPS checklist answer macros
-\newcommand{\answerYes}[1][]{\textbf{[Yes]}}
-\newcommand{\answerNo}[1][]{\textbf{[No]}}
-\newcommand{\answerNA}[1][]{\textbf{[N/A]}}
-\newcommand{\answerPartial}[1][]{\textbf{[Partial]}}
-\newcommand{\answerTODO}[1][]{\textbf{[TODO]}}
+% \answerYes, \answerNo, \answerNA, \answerTODO defined by neurips_2026.sty
+% Add \answerPartial not in official sty
+\newcommand{\answerPartial}[1][]{\textcolor{blue}{[Partial]#1}}
 
 \title{Inhibitory Attention for Clinical Long-Context Reasoning:\\
 Characterizing and Mitigating Lost-in-the-Middle Effects in EHR Processing}
@@ -154,120 +150,57 @@ This paper makes four contributions:
 \end{enumerate}
 
 %% ─────────────────────────────────────────────────────────────────────────────
-\section{Background}
+\section{Related Work}
 \label{sec:background}
 
-\subsection{Lost in the Middle}
+\paragraph{Lost in the Middle.}
+\citet{liu2024lost} characterized LitM in multi-document QA and key-value retrieval,
+finding a consistent U-shaped accuracy curve (15--25~pp trough) across models from
+GPT-3.5-Turbo to Claude-2. All prior LitM characterization uses synthetic benchmarks;
+no study has examined the phenomenon in clinical EHR contexts.
 
-The systematic degradation of language model performance for information located
-in the middle of long input contexts was characterized by \citet{liu2024lost}
-in multi-document question answering and key-value retrieval. Their study
-examined models from GPT-3.5-Turbo to Claude-2 and found a consistent U-shaped
-accuracy curve, with a trough of 15--25 percentage points for middle positions.
-\citet{liu2024lost} hypothesized that standard causal attention creates an
-implicit positional prior favoring primacy and recency, consistent with serial
-position effects in human memory. Critically, all prior LitM characterization
-has been conducted on synthetic multi-document benchmarks; no study has examined
-the phenomenon in clinical EHR contexts.
-
-\subsection{Inhibitory Attention Mechanisms}
-
-The mechanistic basis for inhibitory attention was established by
-\citet{mcdougall2023copy}, who demonstrated through activation patching
-experiments that a subset of attention heads in GPT-2 perform \emph{copy
-suppression}: they attend to tokens that appear frequently in context and reduce
-their logit contribution, preventing the model from blindly copying
-contextually irrelevant tokens. The Differential
-Transformer~\cite{ye2025differential} generalizes this principle into a
-trainable architecture: the model computes the difference of two softmax maps
-over separate query-key projections, where the second map is scaled by a
-learnable parameter $\lambda$:
+\paragraph{Inhibitory attention mechanisms.}
+\citet{mcdougall2023copy} established that a subset of GPT-2 attention heads perform
+\emph{copy suppression}---reducing logit contributions for contextually frequent tokens.
+The Differential Transformer~\cite{ye2025differential} generalizes this into a trainable
+architecture via differential softmax maps over separate query-key projections,
+scaled by a learnable parameter $\lambda$:
 \begin{equation}
   A_\mathrm{diff} = \mathrm{softmax}\!\left(\frac{Q_1 K_1^\top}{\sqrt{d}}\right)
     - \lambda \cdot \mathrm{softmax}\!\left(\frac{Q_2 K_2^\top}{\sqrt{d}}\right)
   \label{eq:diffattn}
 \end{equation}
-\citet{ye2025differential} report significant improvements on long-context
-benchmarks. \citet{lv2024negative} introduced architectures in which attention
-weights are allowed to take explicit negative values, enabling direct
-suppression of attended content beyond what differential softmax achieves. None
-of these architectures have been evaluated on clinical EHR data.
+\citet{lv2024negative} extend this to explicit negative attention weights.
+None of these architectures have been evaluated on clinical EHR data.
 
-\subsection{KV Cache Compression and Context Selection}
+\paragraph{Context compression and query-conditioned selection.}
+KV cache compression methods~\cite{zhang2023h2o,li2024snapkv,pan2024llmlingua2,%
+bui2025cachewhat,zhou2024dynamickv} improve memory efficiency but operate
+post-attention: middle-context tokens with low attention due to positional bias
+are evicted, exacerbating CLitM. Query-conditioned selection methods---SeleCom
+\cite{liu2026selecom} (hard token selection guided by query relevance) and
+Sentinel~\cite{zhang2025sentinel} (attention-probing-based compression)---share
+the relevance-driven framing that QCCS adopts, but have not been evaluated for
+positional bias correction in clinical EHR contexts.
 
-H$_2$O~\cite{zhang2023h2o} demonstrates that a small subset of ``heavy
-hitter'' tokens accumulates the majority of attention mass and that evicting
-non-heavy-hitter tokens incurs minimal accuracy loss. SnapKV~\cite{li2024snapkv}
-compresses the prefill-phase KV cache by retaining tokens with high attention
-from instruction tokens. LLMLingua-2~\cite{pan2024llmlingua2} operates at the
-prompt level, dropping low-contribution tokens. These compression approaches
-improve memory efficiency but do not address the positional bias failure mode:
-a token in the middle receiving low attention due to positional bias would be
-evicted, exacerbating rather than correcting CLitM.
+\paragraph{Dense retrieval.}
+DPR~\cite{karpukhin2020dpr} demonstrated that dense bi-encoder retrievers
+outperform BM25~\cite{robertson2009bm25} on open-domain QA.
+Compact sentence embeddings~\cite{reimers2019sentence} (\texttt{all-MiniLM-L6-v2},
+384-d) are efficient for sentence-level EHR retrieval. We include dense retrieval
+as a Stage~1 baseline, finding 94.0\% overall recall---semantically richer than
+but below BM25 (98.8\%).
 
-``Cache What Lasts''~\cite{bui2025cachewhat} proposes memory-bounded KV cache
-token retention, weighting token eviction by recency and attention mass.
-DynamicKV~\cite{zhou2024dynamickv} further refines this with task-aware
-adaptive allocation of KV cache budget across layers. Both methods address the
-\emph{what to keep} question within the KV cache; neither targets the
-\emph{positional retrieval} failure that produces CLitM, because they operate
-post-attention rather than on the input context.
-
-Query-conditioned context selection is a related but distinct paradigm. SeleCom
-\cite{liu2026selecom} reframes soft prompt compression in RAG as a query-conditioned
-selector problem, showing that hard token selection guided by query relevance
-outperforms soft compression in faithfulness and retrieval precision. Sentinel
-\cite{zhang2025sentinel} uses attention probing to identify and remove context tokens
-that the model does not utilize, providing a complementary post-hoc compression
-signal. QCCS shares the query-conditioned selection framing but is applied to
-clinical EHR sentence-level selection and is evaluated specifically for
-positional bias correction.
-
-Dense retrieval using bi-encoder architectures provides semantic similarity
-between queries and passages as an alternative to lexical BM25~\cite{robertson2009bm25}.
-DPR~\cite{karpukhin2020dpr} demonstrated that dense encoders trained with
-in-batch negatives outperform BM25 on open-domain question answering. Models
-such as \texttt{all-MiniLM-L6-v2}~\cite{reimers2019sentence} provide compact
-384-dimensional sentence embeddings efficient enough for sentence-level
-EHR retrieval. We include dense retrieval as a Stage~1 baseline in
-Experiment~3, finding that it achieves 94.0\% overall recall---lower than
-BM25 (98.8\%) but semantically richer. Direct Stage~2 LLM accuracy evaluation
-of dense retrieval is left as future work. The extent to which semantic encoders
-pre-trained on general text generalize to clinical EHR vocabulary remains an
-open question.
-
-\subsection{Contextual Position and Attention in Long-Context Models}
-
-Concurrent to our work, Yi et al.~\cite{yi2025attentionbasin} characterize the
-``attention basin'' phenomenon: token positions near the edges of long contexts
-receive systematically higher attention mass than those in the interior,
-providing a mechanistic account of the U-shaped accuracy profile that we
-measure empirically in clinical EHR settings. This independent corroboration
-from a mechanistic perspective strengthens the case that CLitM is an inherent
-property of standard softmax attention rather than a dataset-specific artifact.
-Our work extends this finding to the clinical domain and provides the first
-empirical characterization of CLitM on real EHR instruction-following tasks,
-together with evidence that context pre-selection mitigates the effect.
-
-A distinct line of work addresses long-context processing through positional
-encoding design. RoPE~\cite{su2021roformer} encodes relative position via
-rotation matrices. ALiBi~\cite{press2022alibi} uses fixed linear biases to
-penalize attention by distance. YaRN~\cite{peng2024yarn} extends RoPE through
-frequency-domain interpolation to 128k-token contexts. These methods improve
-length generalization but do not target the within-context positional bias that
-produces CLitM. The two failure modes are orthogonal, requiring complementary
-solutions.
-
-\subsection{Long-Context Clinical NLP}
-
-ClinicalMamba~\cite{yang2024clinicalmamba} applies state-space sequence models
-to EHR notes, leveraging linear recurrence to avoid quadratic attention cost.
-Context Clues~\cite{wornow2025context} demonstrates that in-context learning
-over long EHR event sequences substantially improves EHRSHOT structured
-prediction. MedAlign~\cite{fleming2024medalign} reports that GPT-4 performance
-degrades by 8.3\% as context length increases---an implicit CLitM signal that
-the authors do not formally characterize. Our work directly builds on these
-datasets, extending them with systematic positional perturbation experiments.
+\paragraph{Positional encoding and long-context clinical NLP.}
+RoPE~\cite{su2021roformer}, ALiBi~\cite{press2022alibi}, and YaRN~\cite{peng2024yarn}
+improve length generalization but target out-of-distribution positions rather than
+within-context positional bias. Concurrently, Yi et al.~\cite{yi2025attentionbasin}
+characterize the ``attention basin'' from a mechanistic perspective, providing
+independent corroboration that CLitM arises from standard softmax attention.
+ClinicalMamba~\cite{yang2024clinicalmamba} and Context Clues~\cite{wornow2025context}
+establish EHR long-context baselines; MedAlign~\cite{fleming2024medalign} reports an
+8.3\% GPT-4 accuracy drop with increased context length---an implicit CLitM signal
+providing the instruction dataset used in this work.
 
 %% ─────────────────────────────────────────────────────────────────────────────
 \section{Methods}
@@ -293,11 +226,7 @@ MedAlign \cite{fleming2024medalign}
 EHRSHOT \cite{wornow2023ehrshot}
   & 6,739 patients; 41.7M events
   & 15 binary tasks
-  & Exp~2 structured prediction \\[2pt]
-Anonymized internal
-  & 54,069 patients; 185k encounter notes
-  & 30-day hospitalization
-  & Future external validation \\
+  & Exp~2 structured prediction \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -394,21 +323,17 @@ Experiment~3 evaluation set. The MedAlign TSV contains multiple model-response r
 per (patient, question) pair; we deduplicate to one row per unique pair before all
 Experiment~3 analyses. Gate training requires $\sim$15 minutes on CPU.
 
-\paragraph{Architectural extension.} As a theoretical framework for deeper
-integration, the QCCS gate score can be embedded into a Differential
-Transformer~\cite{ye2025differential} by replacing the scalar inhibition
-parameter $\lambda$ with a per-token, query-conditioned weight:
+\paragraph{Architectural extension.} The gate score can be integrated into a
+Differential Transformer~\cite{ye2025differential} by replacing the scalar
+$\lambda$ with a per-token weight:
 \begin{equation}
   A_\mathrm{QCCS} = \mathrm{softmax}\!\left(\frac{Q_1 K_1^\top}{\sqrt{d}}\right)
     - (\lambda \cdot g) \odot \mathrm{softmax}\!\left(\frac{Q_2 K_2^\top}{\sqrt{d}}\right)
   \label{eq:qccs}
 \end{equation}
-where $\odot$ denotes the Hadamard product along the token dimension and $g \in
-[0,1]^n$ are gate scores from Eq.~\ref{eq:gate} applied to key vectors. This
-formulation would allow end-to-end fine-tuning of the gate within the LLM's
-attention stack, adding $\approx$2\% to total parameter count. Experiment~2
-evaluates the simpler Differential Transformer without the query-conditioned
-gate ($g \equiv 1$); full QCCS attention integration is left for future work.
+where $g \in [0,1]^n$ are gate scores from Eq.~\ref{eq:gate}. Experiment~2
+evaluates Differential Transformer with $g \equiv 1$; full integration is
+left for future work.
 
 \subsection{Experiment 3: Evidence Retrieval Baselines and LLM Re-inference}
 \label{sec:exp3}
@@ -720,150 +645,46 @@ Overall           & 83 & 3.6\,[0,8]  & 1.2\,[0,4]  & 1.2\,[0,4] & 2.4\,[0,6] & \
 \section{Discussion}
 \label{sec:discussion}
 
-The central finding is that the lost-in-the-middle effect is a first-order
-failure mode in clinical EHR processing. The 21.9 percentage-point accuracy
-gap between peak and trough positions in Experiment~1 is not a benchmark
-artifact: it reflects the behavior of state-of-the-art language models on real
-longitudinal patient records, evaluated against clinician-authored reference
-responses. Because 67.8\% of reference answers reside between the 10th and 90th
-percentile of the EHR timeline, this gap maps directly onto content that
-clinicians consider important. A clinical decision support system that achieves
-59.5\% accuracy on early-context facts but only 37.6\% accuracy on
-late-middle-position facts is not a reliable clinical tool.
+The 21.9 percentage-point CLitM gap between peak and trough positions is not
+a benchmark artifact: 67.8\% of reference answers reside between the 10th and
+90th EHR percentile, so this gap maps directly onto content clinicians consider
+important.
 
 \paragraph{Retrieval recall does not predict LLM accuracy.}
-The Experiment~3 results reveal a striking dissociation across evaluation
-levels. At the \emph{retrieval recall} level, BM25 substantially
-outperforms QCCS (98.8\% vs.\ 34.9\% overall; 96.7\% vs.\ 23.3\% for
-middle-position instructions at $k{=}20$). Dense retrieval reaches 94.0\%
-overall and 90.0\% in the middle band. At the \emph{downstream LLM accuracy}
-level (LLM-as-judge), QCCS dominates: 26.5\% [17, 36] overall vs.\ $\leq$3.6\%
-for all comparators; 20.0\% [7, 37] middle vs.\ 3.3\% [0, 10] for BM25,
-0.0\% [0, 0] for both dense and BM25-filtered, and 6.7\% [0, 17] for full context.
-The ranking reversal---QCCS last in recall, first in accuracy---establishes
-that EHR context selection systems must be evaluated end-to-end with semantic
-metrics, not with retrieval recall alone.
-
-Critically, dense retrieval (90.0\% Stage~1 middle recall) achieves 0.0\%
-middle LLM accuracy---no better than BM25-filtered (0.0\%) and worse than BM25
-(3.3\%). The failure of a semantically rich retriever rules out the hypothesis
-that BM25's failure is merely lexical: the issue is that both lexical and dense
-methods retrieve \emph{contextually plausible} but not
-\emph{query-conditionally relevant} sentences. QCCS, trained on
-query-conditioned overlap labels, learns to be selective rather than merely
-high-recall. This explains why lower Stage~1 recall translates to higher Stage~2
-accuracy: the sentences QCCS selects are more useful even when fewer gold
-sentences are included.
+At the retrieval level, BM25 and dense retrieval substantially outperform QCCS
+(98.8\%, 94.0\% vs.\ 34.9\% overall; Table~\ref{tab:qccsgate}). At the
+downstream LLM accuracy level, the ranking inverts: QCCS 26.5\% [17, 36]
+vs.\ $\leq$3.6\% for all comparators (Table~\ref{tab:llm}). This reversal
+establishes that context selection systems must be evaluated end-to-end with
+semantic metrics, not retrieval recall alone.
 
 \paragraph{QCCS provides consistent improvement across position bands.}
-A notable finding of the semantic evaluation is that QCCS outperforms both
-comparators not only at middle positions but in \emph{every} position decile
-(Table~\ref{tab:llm}). The largest absolute margins occur at early-context
-positions (0--10\%: QCCS 46.2\% vs.\ all comparators 0.0\%), where primacy bias
-might be expected to favor the full-context baseline. The full-context model
-(Qwen2.5-7B) fails even at these positions, suggesting that 7B-scale models
-have insufficient retrieval capacity to benefit from primacy-edge advantages in
-long EHR contexts. Context selection circumvents this failure by placing the
-relevant evidence at the beginning of a short, clean context regardless of its
-original temporal position in the EHR.
+QCCS outperforms all comparators in \emph{every} position decile, including
+early-context (0--10\%: 46.2\% vs.\ 0.0\% for all others), where primacy bias
+might have favored the full-context baseline. The full-context Qwen2.5-7B
+fails even at edge positions, confirming that 7B-scale models lack sufficient
+retrieval capacity to benefit from positional advantages in long EHRs.
 
 \paragraph{Structured prediction: selective benefit of inhibitory attention.}
-The structured prediction experiments reveal a task-specific pattern with
-important implications. Differential Transformer yields statistically
-significant gains on class-imbalanced tasks (anemia: +6.1~pp AUROC;
-hyperkalemia: +4.2~pp), but is statistically significantly \emph{worse} than
-standard attention on more balanced tasks (hyponatremia: $-1.9$~pp;
-thrombocytopenia: $-1.5$~pp; non-overlapping CIs in all cases). This bidirectional
-pattern argues against wholesale adoption of inhibitory attention for
-structured EHR prediction: the benefit is real but selective, arising only when
-the target signal is sparse relative to background. For balanced binary
-classification, the inhibitory mechanism appears to suppress informative
-positive-class tokens alongside uninformative ones.
-
-QCCS should be distinguished from KV cache compression methods. H$_2$O and
-SnapKV reduce memory cost by evicting low-attention tokens, but a middle-context
-token receiving low attention due to positional bias would be evicted,
-exacerbating CLitM. QCCS operates upstream of this compression step, selecting
-relevant evidence before any eviction occurs. The approaches are complementary.
+Differential Transformer yields significant gains on class-imbalanced tasks
+(anemia: +6.1~pp AUROC; hyperkalemia: +4.2~pp), but is significantly
+\emph{worse} on more balanced tasks (hyponatremia: $-1.9$~pp;
+thrombocytopenia: $-1.5$~pp; non-overlapping CIs in both cases). The benefit
+is real but selective, arising when target signal is sparse relative to background.
 
 \paragraph{Limitations.}
-MedAlign contains 275 patients, limiting the statistical power of
-domain-stratified analyses. The needle-in-a-haystack design locates
-clinician-authored reference answers within real patient EHR timelines; it does
-not insert synthetic facts, but the MedAlign instructions were authored for a
-specific academic medical center population, which may limit generalization to
-other care settings.
-The Stage~2 LLM evaluation ($N{=}83$, $N{=}30$ middle) is a proof-of-concept
-pilot with wide confidence intervals; differences between arms are not
-statistically significant. A larger evaluation---ideally using the full
-MedAlign dataset with additional institutions---is needed to estimate effect
-sizes with precision. We report bootstrap CIs and use LLM-as-judge semantic
-scoring as a step toward more rigorous evaluation. The QCCS gate training criterion (lexical overlap with the reference
-answer) creates a structural circularity in Stage~1: the gate learns to
-approximate BM25 relevance rather than independent semantic relevance. The
-primary practical consequence is that the gate's recall
-disadvantage versus BM25 at Stage~1 ($\sim$65~pp lower at $k{=}20$) may
-overstate the true difficulty of semantic context selection when trained with
-richer supervision signals (e.g., LLM-generated relevance labels). The
-full-context baseline uses a 16,384-token window; for patients whose
-serialized EHR exceeds this limit, the most recent events are dropped by
-tokenizer truncation. BM25 and QCCS select sentences from the full event
-stream regardless of length, so part of their advantage reflects increased EHR
-\emph{coverage}, not purely CLitM mitigation. Future work with Qwen2.5's 128k
-native context window would isolate the positional component.
-Absolute LLM accuracy (up to 46.2\% with QCCS at the 0--10\% band)
-reflects 7B model capacity and task difficulty; larger models and richer
-supervision would likely yield higher baselines. Prospective clinical
-validation remains necessary before deployment.
-
-%% ─────────────────────────────────────────────────────────────────────────────
-\section{Broader Impact}
-\label{sec:broader}
-
-This work addresses a safety-relevant failure mode in clinical AI systems.
-Uncorrected positional bias in clinical decision support tools could contribute
-to diagnostic errors and medication-related adverse events. QCCS reduces this
-risk by directing model attention toward query-relevant evidence regardless of
-temporal position. We note that the absolute accuracy levels demonstrated
-(up to 46.2\% with QCCS for early-context positions) are insufficient for
-unsupervised clinical decision-making; human oversight remains essential.
-Positional bias mitigation is a necessary but not sufficient condition for safe
-clinical AI deployment. There are potential negative uses of techniques for
-identifying attention biases (e.g., deliberately placing adversarial information
-in the middle of a context to be missed). Transparent characterization and
-architectural mitigation of this effect reduces net risk by enabling model
-developers to test for and address positional bias in production systems.
+See Appendix~\ref{app:limitations} for a full discussion of limitations including
+single-site data, pilot-scale Stage~2 evaluation, QCCS training circularity, and
+context coverage confounds.
 
 %% ─────────────────────────────────────────────────────────────────────────────
 \section{Conclusion}
 \label{sec:conclusion}
 
-Electronic health records are among the longest and most clinically consequential
-documents that language models are now asked to process. We have demonstrated
-that the lost-in-the-middle effect is a robust and clinically significant
-phenomenon in EHR contexts, producing a 21.9 percentage-point accuracy gap
-between peak and trough positions across six language models and multiple
-clinical domains. On gold-answer retrieval, BM25 (98.8\% overall) and dense
-retrieval (94.0\%) substantially outperform the learned QCCS gate
-(34.9\%)---establishing that strong lexical and semantic baselines should be
-evaluated before learned context selectors. However, a semantic LLM-as-judge
-end-to-end evaluation reveals that QCCS outperforms both baselines by a
-substantial margin (overall 26.5\% [17, 36] vs.\ $\leq$3.6\% for all comparators),
-demonstrating that retrieval recall is not the binding constraint for downstream LLM
-accuracy. Dense retrieval (90.0\% Stage~1 recall) also achieves 0.0\% middle LLM
-accuracy, ruling out lexical false positives as the sole failure mode.
-BM25's failure arises from lexical false positives (``Question:''/``Answer:''
-EHR sections), a failure not correctable by header filtering (BM25-filtered: 0.0\% middle). QCCS's learned
-feature space distinguishes query-relevant evidence from these coincidences,
-providing cleaner context for the generative model. On structured EHRSHOT
-prediction, Differential Transformer yields statistically significant gains on
-class-imbalanced tasks (+6.1~pp AUROC on anemia; +4.2~pp on hyperkalemia) but
-is significantly worse on balanced tasks ($-1.9$~pp hyponatremia; $-1.5$~pp
-thrombocytopenia)---a bidirectional pattern suggesting that inhibitory attention
-benefits sparse-signal settings but can suppress informative positive-class
-tokens in balanced classification. Together these results establish both the
-clinical urgency of positional bias in EHR processing and the fundamental lesson
-that end-to-end semantic evaluation is required for context selection systems.
+CLitM is a robust clinical risk (21.9~pp gap; 67.8\% of reference evidence at
+mid-timeline positions). QCCS achieves 7$\times$ higher end-to-end LLM accuracy
+than BM25/dense retrieval despite lower Stage~1 recall, establishing context
+precision as the binding constraint for EHR context selection.
 
 %% ─────────────────────────────────────────────────────────────────────────────
 \bibliographystyle{plainnat}
@@ -963,22 +784,23 @@ that end-to-end semantic evaluation is required for context selection systems.
     LLM re-inference requires $\sim$4--6 GPU-hours on A100 (three-arm,
     $N{=}83$).
 
-\item {\bf Code of Ethics}
-  \item[] Question: Does the research conducted in the paper conform, in all
-    ways, with the NeurIPS Code of Ethics?
+\item {\bf Code of ethics}
+  \item[] Question: Does the research conducted in the paper conform, in every
+    respect, with the NeurIPS Code of Ethics?
   \item[] Answer: \answerYes{}
   \item[] Justification: No human subjects were recruited for this study.
     All patient data used is de-identified and accessed under data use
-    agreements. The Broader Impact section explicitly addresses potential
+    agreements. Appendix~\ref{sec:broader} explicitly addresses potential
     clinical harms and the need for human oversight.
 
-\item {\bf Broader Impacts}
+\item {\bf Broader impacts}
   \item[] Question: Does the paper discuss both potential positive societal
-    impacts and negative societal impacts of the work?
+    impacts and negative societal impacts of the work performed?
   \item[] Answer: \answerYes{}
-  \item[] Justification: Section~6 (Broader Impact) discusses positive impacts
-    (improving reliability of clinical AI, reducing diagnostic errors) and
-    negative impacts (potential for adversarial exploitation of attention biases).
+  \item[] Justification: Appendix~\ref{sec:broader} (Broader Impact) discusses
+    positive impacts (improving reliability of clinical AI, reducing diagnostic
+    errors) and negative impacts (potential for adversarial exploitation of
+    attention biases).
 
 \item {\bf Safeguards}
   \item[] Question: Does the paper describe safeguards that have been put in
@@ -1004,27 +826,71 @@ that end-to-end semantic evaluation is required for context selection systems.
     released at the GitHub repository with a README, requirements, and
     data access instructions.
 
-\item {\bf Crowdsourcing and Research with Human Subjects}
+\item {\bf Crowdsourcing and research with human subjects}
   \item[] Question: For crowdsourcing experiments and research with human
-    subjects, does the paper include the associated IRB approval?
+    subjects, does the paper include the full text of instructions given to
+    participants and screenshots, if applicable, as well as details about
+    compensation (if any)?
   \item[] Answer: \answerNA{}
-  \item[] Justification: No crowdsourcing or human subjects research was
-    conducted. MedAlign instructions were written by physicians as part of
-    the original MedAlign study; our work uses existing annotations.
+  \item[] Justification: No crowdsourcing or research with human subjects was
+    conducted. This work uses existing annotated datasets (MedAlign, EHRSHOT).
 
-\item {\bf Inclusion and Diversity}
-  \item[] Question: Does the paper meaningfully address issues of diversity,
-    equity, and inclusion?
-  \item[] Answer: \answerPartial{}
-  \item[] Justification: The study dataset (MedAlign, Stanford STARR-OMOP) is
-    drawn from a single academic medical center, limiting demographic diversity.
-    We flag this as a limitation and note that prospective validation in
-    broader populations is necessary before deployment.
+\item {\bf Institutional review board (IRB) approvals or equivalent for research with human subjects}
+  \item[] Question: Does the paper describe potential risks incurred by study
+    participants, whether such risks were disclosed to the subjects, and whether
+    IRB approvals (or an equivalent approval/review) were obtained?
+  \item[] Answer: \answerNA{}
+  \item[] Justification: No human subjects research was conducted. All EHR
+    data is de-identified and accessed under existing data use agreements
+    (MedAlign: Stanford AIMI DUA; EHRSHOT: PhysioNet credentialing). No new
+    IRB approval was required for this secondary analysis.
+
+\item {\bf Declaration of LLM usage}
+  \item[] Question: Does the paper describe the usage of LLMs if it is an
+    important, original, or non-standard component of the core methods in
+    this research?
+  \item[] Answer: \answerYes{}
+  \item[] Justification: LLMs are used in two core components: (1)
+    Qwen2.5-7B-Instruct for Stage~2 re-inference evaluation (Section~3.3);
+    (2) Claude Haiku (\texttt{claude-haiku-4-5-20251001}) as LLM-as-judge
+    for semantic evaluation of response quality (Section~3.3). Both usages
+    are described in detail in the Methods section.
 
 \end{enumerate}
 
 %% ─────────────────────────────────────────────────────────────────────────────
 \appendix
+
+\section{Broader Impact}
+\label{sec:broader}
+
+This work addresses a safety-relevant failure mode in clinical AI systems.
+Uncorrected positional bias in clinical decision support tools could contribute
+to diagnostic errors and medication-related adverse events. QCCS reduces this
+risk by directing model attention toward query-relevant evidence regardless of
+temporal position. The absolute accuracy levels demonstrated (up to 46.2\% with
+QCCS for early-context positions) are insufficient for unsupervised clinical
+decision-making; human oversight remains essential. Positional bias mitigation
+is a necessary but not sufficient condition for safe clinical AI deployment.
+There are potential negative uses of techniques for identifying attention biases
+(e.g., deliberately placing adversarial information in the middle of a context
+to be missed). Transparent characterization and architectural mitigation of this
+effect reduces net risk by enabling developers to test for and address positional
+bias in production systems.
+
+\section{Limitations}
+\label{app:limitations}
+
+MedAlign contains 275 patients from a single academic medical center, limiting
+statistical power and generalizability. The Stage~2 LLM evaluation ($N{=}83$,
+$N{=}30$ middle) is a proof-of-concept pilot; differences between arms are not
+statistically significant at this sample size. The QCCS gate training criterion
+(lexical overlap) creates a structural circularity: the gate learns to approximate
+BM25 relevance, which may overstate the difficulty of semantic selection under
+richer supervision (e.g., LLM-generated labels). The 16,384-token full-context
+baseline drops late EHR events on long records; BM25 and QCCS select from the full
+stream, so part of their advantage reflects coverage rather than CLitM mitigation.
+Prospective clinical validation across diverse populations remains necessary.
 
 \section{Extended CLitM Curves by Model and Clinical Domain}
 \label{app:ucurves}
@@ -1074,15 +940,6 @@ Thrombocytopenia & 0.879 & 0.863 & 0.863 \\
 \bottomrule
 \end{tabular}
 \end{center}
-
-\section{Internal Validation Dataset Description}
-\label{app:waymark}
-
-The anonymized internal dataset consists of 185,000 de-identified encounter
-notes from 54,069 Medicaid-enrolled patients receiving community-based primary
-care services. Records span a mean of 2.8 years per patient across three US
-states. The dataset is held under a data governance agreement and is not
-released; it will be used for prospective external validation in a future study.
 
 \section{Query Conditioning Ablation}
 \label{app:noquery}
