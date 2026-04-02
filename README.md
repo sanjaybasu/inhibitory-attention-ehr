@@ -4,7 +4,7 @@ Code for: **"Inhibitory Attention for Clinical Long-Context Reasoning: Character
 
 Sanjay Basu (Waymark Care / UCSF), Sadiq Patel (Waymark Care / UPenn)
 
-*NeurIPS 2026 — under review*
+*Under review, 2026*
 
 ---
 
@@ -16,8 +16,10 @@ This repository contains all experiment code for:
 |---|---|---|
 | Exp 1: CLitM Characterization | `experiments/exp1_medalign_litm.py` | U-curve positional bias on MedAlign (6 LLMs) |
 | Exp 2: EHRSHOT Structured Prediction | `experiments/exp2_ehrshot_diffattn.py` | Differential Transformer vs standard attention on EHRSHOT lab tasks |
-| Exp 3: QCCS Gate Training + Evaluation | `experiments/exp3_qccs_gate.py` | Train and evaluate the QCCS gate on MedAlign |
-| Exp 3 LLM: Re-inference via Modal | `experiments/modal_app.py` | Qwen2.5-7B-Instruct re-inference on QCCS-compressed context |
+| Exp 3: QCCS Gate Training | `experiments/exp3_qccs_gate.py` | Train the QCCS gate on MedAlign |
+| Exp 3 Stage 1: Extended Baselines | `experiments/exp3_extended_baselines.py` | BM25 / BM25-filtered / Dense / QCCS retrieval recall (N=83 dedup) |
+| Exp 3 Stage 2: LLM Re-inference via Modal | `experiments/modal_app.py` | 5-arm Qwen2.5-7B-Instruct re-inference (Full / BM25 / B25f / Dense / QCCS) |
+| Exp 3 LLM Judge | `experiments/exp3_llm_judge.py` | Claude Haiku semantic judging of Stage 2 responses |
 | Analysis + Figures | `experiments/analyze_results.py` | Build all tables and figures from raw CSVs |
 
 ## Setup
@@ -60,11 +62,19 @@ modal run experiments/modal_app.py::run_exp2
 ```bash
 # Step 1: Train QCCS gate locally (CPU, ~15 min)
 python experiments/exp3_qccs_gate.py
-# Output: figures/qccs_gate.pt, figures/exp3_qccs_results.csv
+# Output: figures/qccs_gate.pt
 
-# Step 2: LLM re-inference on Modal GPU
-modal run experiments/modal_app.py::run_exp3_llm
-# Output: figures/exp3_llm_inference_results.csv (819 rows)
+# Step 2: Stage 1 retrieval recall — BM25, BM25-filtered, Dense, QCCS
+python experiments/exp3_extended_baselines.py
+# Output: figures/exp3_extended_stage1.csv (N=83, 4 methods)
+
+# Step 3: 5-arm LLM re-inference on Modal GPU (A100 80GB)
+modal run experiments/modal_app.py::run_llm_v3_entrypoint
+# Output: figures/exp3_v3_llm_results.csv (N=83, 5 arms)
+
+# Step 4: LLM-as-judge scoring (Claude Haiku)
+python experiments/exp3_llm_judge.py --v3
+# Output: figures/exp3_v3_llm_results_judged.csv
 ```
 
 ### Build all tables and figures
@@ -83,7 +93,7 @@ python experiments/analyze_results.py
                Characterizing and Mitigating Lost-in-the-Middle Effects
                in {EHR} Processing},
   author    = {Basu, Sanjay and Patel, Sadiq},
-  booktitle = {Advances in Neural Information Processing Systems (NeurIPS 2026)},
+  note      = {Under review, 2026},
   year      = {2026}
 }
 ```

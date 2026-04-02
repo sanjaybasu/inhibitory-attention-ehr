@@ -109,16 +109,25 @@ def run_exp2_all():
         print(f"\n{task}: {res}")
 
 
-# ── Experiment 3: Qwen2.5-7B LLM inference for QCCS evaluation ───────────────
+# ── Experiment 3 v2: Qwen2.5-7B LLM inference — 3-arm (Full / QCCS / BM25) ───
+#
+# KEY FIXES vs original:
+#   1. Contexts built ON Modal from volume data (no payload-size truncation)
+#   2. Full-context baseline uses 32k-token window (vs. 4096 previously)
+#   3. BM25 added as third comparison arm alongside QCCS
+#   4. Same 30% test split (seed=42) as exp3_baselines.py for consistency
+
+LOCAL_FIGURES = Path("/Users/sanjaybasu/waymark-local/notebooks/inhibitory-attention-ehr/figures")
 
 llm_image = (
     modal.Image.debian_slim(python_version="3.11")
     .pip_install([
         "torch==2.3.0", "transformers==4.41.0", "accelerate",
         "bitsandbytes", "pandas", "numpy", "sentencepiece",
-        "pyarrow",
+        "pyarrow", "rank-bm25", "scikit-learn", "matplotlib",
     ])
     .add_local_dir(str(EXPERIMENTS_DIR), remote_path="/experiments")
+    .add_local_file(str(LOCAL_FIGURES / "qccs_gate.pt"), remote_path="/gate/qccs_gate.pt")
 )
 
 
@@ -128,61 +137,80 @@ llm_image = (
     memory=80000,
     image=llm_image,
     volumes={"/results": results_vol, "/mnt-data": data_vol},
-    # Add secret when ready: secrets=[modal.Secret.from_name("huggingface-token")]
-    # Create via: modal secret create huggingface-token HF_TOKEN=hf_xxxxx
 )
-def run_llm_inference(records: list[dict],
-                      model_id: str = "Qwen/Qwen2.5-7B-Instruct",
-                      use_qccs: bool = True,
-                      keep_top_k: int = 20) -> list[dict]:
+def run_llm_inference_v2(records: list[dict],
+                         model_id: str = "Qwen/Qwen2.5-7B-Instruct",
+                         keep_top_k: int = 20) -> list[dict]:
     """
-    Run Qwen2.5-7B-Instruct on MedAlign records (with and without QCCS gate).
-    Each record: {filename, question, position, context_full, context_qccs, expected}
-    Returns: [{filename, question, position, baseline_correct, qccs_correct}]
-    """
-    import os, torch
-    from transformers import AutoTokenizer, AutoModelForCausalLM
+    Three-arm LLM evaluation on MedAlign test split.
 
-    print(f"Loading {model_id} on GPU...")
-    hf_token = os.environ.get("HF_TOKEN")  # optional for public models
-    tokenizer = AutoTokenizer.from_pretrained(model_id, token=hf_token)
-    model = AutoModelForCausalLM.from_pretrained(
-        model_id, device_map="auto", torch_dtype=torch.float16,
-        token=hf_token,
-    )  # No 4-bit quant needed — Qwen2.5-7B fits in fp16 on A100 80GB (~14 GB VRAM)
-    # Qwen2.5 uses a different prompt template
-    if "Qwen" in model_id:
-        def _qwen_prompt(context: str, question: str) -> str:
-            return (f"<|im_start|>system\nYou are a clinical assistant.<|im_end|>\n"
-                    f"<|im_start|>user\nBased ONLY on the patient record below, "
-                    f"answer the question briefly.\n\nPATIENT RECORD:\n"
-                    f"{context[:16000]}\n\nQUESTION: {question}<|im_end|>\n"
-                    f"<|im_start|>assistant\n")
+    Contexts are built here from volume-mounted EHR data so that the full
+    EHR text is available without payload-size truncation.
+
+    Arms:
+      baseline  — full chronological EHR, truncated at 32k tokens (model window)
+      qccs      — top-k sentences by learned gate + 5 most-recent events
+      bm25      — top-k sentences by BM25 + 5 most-recent events
+
+    Each record: {filename, question, expected, position}
+    Returns list of {filename, question, position,
+                     baseline_correct, qccs_correct, bm25_correct,
+                     baseline_response, qccs_response, bm25_response}
+    """
+    import os, re, sys, torch
+    import xml.etree.ElementTree as ET
+    import pandas as pd
+    from pathlib import Path as _Path
+    from transformers import AutoTokenizer, AutoModelForCausalLM
+    from rank_bm25 import BM25Okapi
+
+    sys.path.insert(0, "/experiments")
+    from exp3_qccs_gate import (parse_ehr_sentences, sentences_to_context,
+                                 qccs_compress, QCCSGate, CharNgramTokenizer)
+
+    EHR_DIR = _Path("/mnt-data/medalign/MedAlign_files/medalign_instructions_v1_3/ehrs")
+
+    # ── Load gate ──────────────────────────────────────────────────────────────
+    gate_path = _Path("/gate/qccs_gate.pt")
+    gate = QCCSGate()
+    state = torch.load(str(gate_path), map_location="cpu", weights_only=False)
+    if isinstance(state, dict) and "state_dict" in state:
+        gate.load_state_dict(state["state_dict"])
     else:
-        _qwen_prompt = None
+        gate.load_state_dict(state)
+    gate.eval()
+    tok_fn = CharNgramTokenizer()
+
+    # ── Load LLM ───────────────────────────────────────────────────────────────
+    print(f"Loading {model_id} on GPU...")
+    hf_token = os.environ.get("HF_TOKEN")
+    llm_tok = AutoTokenizer.from_pretrained(model_id, token=hf_token)
+    model = AutoModelForCausalLM.from_pretrained(
+        model_id, device_map="auto", torch_dtype=torch.float16, token=hf_token,
+    )
     model.eval()
     print(f"Model loaded. Processing {len(records)} records...")
 
-    def generate(context: str, question: str, max_tokens: int = 128) -> str:
-        if _qwen_prompt is not None:
-            prompt = _qwen_prompt(context, question)
-        else:
-            prompt = (
-                f"[INST] You are a clinical assistant. Based ONLY on the patient "
-                f"record below, answer the question briefly.\n\n"
-                f"PATIENT RECORD:\n{context[:16000]}\n\n"
-                f"QUESTION: {question} [/INST]"
-            )
-        inputs = tokenizer(prompt, return_tensors="pt",
-                           truncation=True, max_length=4096).to(model.device)
+    # ── Helpers ────────────────────────────────────────────────────────────────
+    def build_prompt(context: str, question: str) -> str:
+        return (f"<|im_start|>system\nYou are a clinical assistant.<|im_end|>\n"
+                f"<|im_start|>user\nBased ONLY on the patient record below, "
+                f"answer the question briefly.\n\nPATIENT RECORD:\n"
+                f"{context}\n\nQUESTION: {question}<|im_end|>\n"
+                f"<|im_start|>assistant\n")
+
+    def generate(context: str, question: str,
+                 max_new_tokens: int = 128, ctx_token_limit: int = 32768) -> str:
+        prompt = build_prompt(context, question)
+        inputs = llm_tok(prompt, return_tensors="pt",
+                         truncation=True, max_length=ctx_token_limit).to(model.device)
         with torch.no_grad():
-            out = model.generate(**inputs, max_new_tokens=max_tokens,
+            out = model.generate(**inputs, max_new_tokens=max_new_tokens,
                                  do_sample=False, temperature=1.0)
-        return tokenizer.decode(out[0][inputs["input_ids"].shape[1]:],
-                                skip_special_tokens=True).strip()
+        return llm_tok.decode(out[0][inputs["input_ids"].shape[1]:],
+                              skip_special_tokens=True).strip()
 
     def score_response(response: str, expected: str) -> float:
-        import re
         r, e = response.lower(), expected.lower()
         if e in r:
             return 1.0
@@ -192,103 +220,457 @@ def run_llm_inference(records: list[dict],
             return 0.5
         return 0.0
 
+    # ── Cache parsed EHRs and per-patient BM25 indices ────────────────────────
+    xml_cache: dict   = {}
+    bm25_cache: dict  = {}   # fname → BM25Okapi (built once per patient)
+    corpus_cache: dict = {}  # fname → tokenized corpus (for BM25)
+
+    def get_events(fname: str) -> list[dict]:
+        if fname not in xml_cache:
+            xml_path = EHR_DIR / fname
+            xml_cache[fname] = parse_ehr_sentences(xml_path) if xml_path.exists() else []
+        return xml_cache[fname]
+
+    def get_bm25(fname: str, events: list[dict]):
+        """Return cached (corpus, BM25Okapi) for this patient."""
+        if fname not in bm25_cache:
+            corpus_cache[fname] = [re.findall(r'\w+', ev["text"].lower())
+                                   for ev in events]
+            bm25_cache[fname]   = BM25Okapi(corpus_cache[fname]) if any(corpus_cache[fname]) else None
+        return corpus_cache[fname], bm25_cache[fname]
+
+    def bm25_compress(fname: str, events: list[dict],
+                      query: str, keep_top_k: int = 20) -> str:
+        """Select top-k events by BM25 score + 5 most-recent, then serialize."""
+        corpus, bm25_idx = get_bm25(fname, events)
+        recent_idx = {ev["idx"] for ev in events[-5:]}
+        if bm25_idx is None:
+            kept = events[-keep_top_k:]
+        else:
+            q_tokens = re.findall(r'\w+', query.lower())
+            scores = bm25_idx.get_scores(q_tokens) if q_tokens else [0.0] * len(events)
+            scored = sorted(range(len(scores)), key=lambda i: -scores[i])
+            keep = set(scored[:keep_top_k]) | recent_idx
+            kept = [ev for ev in events if ev["idx"] in keep]
+        kept.sort(key=lambda e: e["timestamp"])
+        return sentences_to_context(kept)
+
+    # ── Main loop with incremental saves every 50 records ─────────────────────
+    SAVE_EVERY = 10   # 83 unique records total; checkpoint every 10
     results = []
     for i, rec in enumerate(records):
-        if (i + 1) % 20 == 0:
+        if (i + 1) % 10 == 0:
             print(f"  {i+1}/{len(records)}")
 
-        # Baseline (full context)
-        baseline_resp  = generate(rec["context_full"], rec["question"])
-        baseline_score = score_response(baseline_resp, rec.get("expected", ""))
+        fname  = rec["filename"]
+        events = get_events(fname)
+        if not events:
+            continue
 
-        # QCCS (compressed context)
-        qccs_resp  = generate(rec["context_qccs"], rec["question"])
-        qccs_score = score_response(qccs_resp, rec.get("expected", ""))
+        question = rec["question"]
+        expected = rec.get("expected", "")
+
+        ctx_full = sentences_to_context(events, max_chars=400000)   # no cap; tokenizer truncates
+        ctx_qccs, _ = qccs_compress(events, question, gate, tok_fn, keep_top_k=keep_top_k)
+        ctx_bm25 = bm25_compress(fname, events, question, keep_top_k=keep_top_k)
+
+        # Full-context arm: 16k-token window (32k caused OOM during logits.float() prefill on A100 80GB)
+        # Compressed arms: 4k tokens is sufficient for ~20 selected sentences
+        bl_resp   = generate(ctx_full,  question, ctx_token_limit=16384)
+        qccs_resp = generate(ctx_qccs,  question, ctx_token_limit=4096)
+        bm25_resp = generate(ctx_bm25,  question, ctx_token_limit=4096)
 
         results.append({
-            "filename": rec["filename"],
-            "question": rec["question"][:100],
-            "position": rec.get("position", float("nan")),
-            "baseline_correct": baseline_score,
-            "qccs_correct": qccs_score,
-            "baseline_response": baseline_resp[:200],
-            "qccs_response": qccs_resp[:200],
+            "filename":          fname,
+            "question":          question[:100],
+            "position":          rec.get("position", float("nan")),
+            "baseline_correct":  score_response(bl_resp,   expected),
+            "qccs_correct":      score_response(qccs_resp, expected),
+            "bm25_correct":      score_response(bm25_resp, expected),
+            "baseline_response": bl_resp[:200],
+            "qccs_response":     qccs_resp[:200],
+            "bm25_response":     bm25_resp[:200],
         })
 
-    # Save to volume
-    import pandas as pd
-    pd.DataFrame(results).to_csv("/results/exp3_llm_inference_results.csv",
-                                 index=False)
+        # Incremental checkpoint every SAVE_EVERY records
+        if len(results) % SAVE_EVERY == 0:
+            pd.DataFrame(results).to_csv("/results/exp3_v2_llm_results.csv", index=False)
+            results_vol.commit()
+            print(f"  [checkpoint] saved {len(results)} rows")
+
+    pd.DataFrame(results).to_csv("/results/exp3_v2_llm_results.csv", index=False)
     results_vol.commit()
-    print(f"Saved {len(results)} results to volume.")
+    print(f"Saved {len(results)} results to /results/exp3_v2_llm_results.csv")
     return results
 
 
 @app.local_entrypoint()
-def run_llm_inference_entrypoint():
+def run_llm_v2_entrypoint():
     """
-    Prepare MedAlign records and dispatch LLM inference to Modal.
-    Run locally: modal run modal_app.py::run_llm_inference_entrypoint
+    Prepare 30%-test-split MedAlign records and run 3-arm LLM inference on Modal A100.
+
+    Run: modal run modal_app.py::run_llm_v2_entrypoint
     """
-    import sys, pandas as pd
-    sys.path.insert(0, str(Path(__file__).parent))
-    from exp3_qccs_gate import (parse_ehr_sentences, sentences_to_context,
-                                 qccs_compress, QCCSGate, CharNgramTokenizer)
-    import torch
+    import pandas as pd
+    from sklearn.model_selection import train_test_split
 
-    BASE    = Path("/Users/sanjaybasu/waymark-local/data/medalign/MedAlign_files")
-    TSV     = BASE / "medalign_instructions_v1_3/clinician-reviewed-model-responses.tsv"
-    EHR_DIR = BASE / "medalign_instructions_v1_3/ehrs"
-    OUT_D   = Path("/Users/sanjaybasu/waymark-local/notebooks/inhibitory-attention-ehr/figures")
+    BASE    = LOCAL_ROOT / "data" / "medalign" / "MedAlign_files"
+    TSV     = BASE / "medalign_instructions_v1_3" / "clinician-reviewed-model-responses.tsv"
+    OUT_D   = LOCAL_FIGURES
 
-    df = pd.read_csv(TSV, sep="\t", low_memory=False)
-    df = df[df["is_used_eval"].astype(str).str.lower().isin(["true","yes","1"])]
+    df = pd.read_csv(TSV, sep="\t")
+    df = df.dropna(subset=["question", "evidence", "filename"])
 
-    # Load gate (trained by exp3_qccs_gate.py)
-    tokenizer = CharNgramTokenizer()
-    gate = QCCSGate()
-    gate_path = OUT_D / "qccs_gate.pt"
-    if gate_path.exists():
-        gate.load_state_dict(torch.load(gate_path, map_location="cpu"))
-        print("Loaded QCCS gate from disk.")
-    else:
-        print("WARNING: gate not trained yet. Run exp3_qccs_gate.py first.")
+    # Same 30% test split as exp3_baselines.py (seed=42)
+    patients = df["filename"].unique()
+    _, test_patients = train_test_split(patients, test_size=0.30, random_state=42)
+    df_test = df[df["filename"].isin(set(test_patients))].copy()
 
-    # Load positions from Exp1
+    # Deduplicate: the TSV has ~8 rows per (filename, question) — one per model
+    # evaluated in the MedAlign benchmark. Since Qwen2.5 inference is deterministic
+    # (do_sample=False), all copies give identical results; we keep one per unique pair.
+    df_test = df_test.drop_duplicates(subset=["filename", "question"])
+    print(f"Test split: {len(test_patients)} patients, {len(df_test)} unique instructions")
+
+    # Load gold positions from Exp 1
     pos_path = OUT_D / "exp1_litm_results.csv"
     pos_df = pd.read_csv(pos_path) if pos_path.exists() else pd.DataFrame()
 
     records = []
-    for fname in df["filename"].unique():
-        xml_path = EHR_DIR / fname
-        if not xml_path.exists():
+    for _, row in df_test.iterrows():
+        fname    = str(row["filename"])
+        question = str(row["question"])
+        # Use 'evidence' (short gold answer directly from EHR) as expected.
+        # 'clinician_response' is a model-specific long-form annotation and
+        # does not match what a 7B model generates.
+        expected = str(row.get("evidence", "")).strip()
+
+        pos_row = pos_df[
+            (pos_df["filename"] == fname) &
+            (pos_df["question"]  == question)
+        ] if not pos_df.empty else pd.DataFrame()
+        pos = float(pos_row["position"].iloc[0]) if len(pos_row) > 0 else float("nan")
+
+        records.append({"filename": fname, "question": question,
+                         "expected": expected, "position": pos})
+
+    print(f"Dispatching {len(records)} records to Modal A100 (3 arms × {len(records)} = "
+          f"{len(records)*3} LLM calls)...")
+
+    # Use spawn() so the A100 job continues even if the local process exits.
+    # Results are saved incrementally to the Modal volume (every 50 records),
+    # and in full upon completion. Download with:
+    #   modal volume get clinical-litm-results exp3_v2_llm_results.csv <local_path>
+    handle = run_llm_inference_v2.spawn(records)
+    print(f"Spawned detached job. Function call ID: {handle.object_id}")
+    print("Job is running on A100. Check progress:")
+    print("  modal volume ls clinical-litm-results")
+    print("  modal app logs ap-...  (see app ID in Modal dashboard)")
+    print("Download results when done:")
+    print("  modal volume get clinical-litm-results exp3_v2_llm_results.csv "
+          f"{OUT_D}/exp3_v2_llm_results.csv")
+
+
+# ── Experiment 3 v3: 5-arm evaluation (Full / QCCS / BM25 / BM25-filtered / Dense) ───
+#
+# Extends v2 by adding:
+#   4. dense         — sentence-transformer cosine similarity top-k
+#   5. bm25_filtered — BM25 after removing section-header false positives
+# Both ablations test the hypothesis that BM25's failure is due to header contamination
+# (bm25_filtered) and that semantic retrieval bridges recall–accuracy gap (dense).
+
+llm_image_v3 = (
+    modal.Image.debian_slim(python_version="3.11")
+    .pip_install([
+        "torch==2.3.0", "transformers==4.41.0", "accelerate",
+        "bitsandbytes", "pandas", "numpy", "sentencepiece",
+        "pyarrow", "rank-bm25", "scikit-learn", "matplotlib",
+        "sentence-transformers",
+    ])
+    .add_local_dir(str(EXPERIMENTS_DIR), remote_path="/experiments")
+    .add_local_file(str(LOCAL_FIGURES / "qccs_gate.pt"), remote_path="/gate/qccs_gate.pt")
+)
+
+
+@app.function(
+    gpu="A100",
+    timeout=14400,   # 4 hours — 5 arms × 83 records
+    memory=80000,
+    image=llm_image_v3,
+    volumes={"/results": results_vol, "/mnt-data": data_vol},
+)
+def run_llm_inference_v3(records: list[dict],
+                          model_id: str = "Qwen/Qwen2.5-7B-Instruct",
+                          keep_top_k: int = 20) -> list[dict]:
+    """
+    Five-arm LLM evaluation on MedAlign test split.
+
+    Arms:
+      baseline      — full chronological EHR, truncated at 16k tokens
+      qccs          — top-k sentences by learned gate + 5 most-recent events
+      bm25          — top-k by BM25 score + 5 most-recent events
+      bm25_filtered — BM25 after filtering section-header false positives
+      dense         — top-k by sentence-transformer cosine similarity + 5 most-recent
+
+    Each record: {filename, question, expected, position}
+    Output file: /results/exp3_v3_llm_results.csv
+    """
+    import os, re, sys, torch
+    import numpy as np
+    import pandas as pd
+    from pathlib import Path as _Path
+    from transformers import AutoTokenizer, AutoModelForCausalLM
+    from rank_bm25 import BM25Okapi
+    from sentence_transformers import SentenceTransformer
+
+    sys.path.insert(0, "/experiments")
+    from exp3_qccs_gate import (parse_ehr_sentences, sentences_to_context,
+                                 qccs_compress, QCCSGate, CharNgramTokenizer)
+
+    EHR_DIR = _Path("/mnt-data/medalign/MedAlign_files/medalign_instructions_v1_3/ehrs")
+
+    # ── Section-header filter (matches exp3_extended_baselines.py) ─────────────
+    _HEADER_PATS = [
+        re.compile(r'^\s*question\s*[:\d]', re.I),
+        re.compile(r'^\s*answer\s*[:\d]', re.I),
+        re.compile(r'^\s*counseling\s*[:\d]', re.I),
+        re.compile(r'^\s*follow.?up\s*[:\d]', re.I),
+        re.compile(r'^\s*review\s+of\s+systems?\s*[:\d]?', re.I),
+        re.compile(r'^\s*chief\s+complaint\s*[:\d]?', re.I),
+        re.compile(r'^\s*assessment\s*[:\d]', re.I),
+        re.compile(r'^\s*plan\s*[:\d]', re.I),
+        re.compile(r'^\s*subjective\s*[:\d]?', re.I),
+        re.compile(r'^\s*objective\s*[:\d]?', re.I),
+        re.compile(r'^\s*disposition\s*[:\d]?', re.I),
+    ]
+
+    def _is_header(text: str) -> bool:
+        t = text.strip()
+        if len(t) < 5:
+            return True
+        for pat in _HEADER_PATS:
+            if pat.match(t):
+                return True
+        if len(t) <= 40 and t.upper() == t and re.match(r'^[A-Z\\s/:-]+$', t):
+            return True
+        return False
+
+    # ── Load QCCS gate ─────────────────────────────────────────────────────────
+    gate = QCCSGate()
+    state = torch.load("/gate/qccs_gate.pt", map_location="cpu", weights_only=False)
+    if isinstance(state, dict) and "state_dict" in state:
+        gate.load_state_dict(state["state_dict"])
+    else:
+        gate.load_state_dict(state)
+    gate.eval()
+    tok_fn = CharNgramTokenizer()
+
+    # ── Load dense encoder ─────────────────────────────────────────────────────
+    print("Loading sentence encoder (all-MiniLM-L6-v2)...")
+    encoder = SentenceTransformer("all-MiniLM-L6-v2")
+
+    # ── Load LLM ───────────────────────────────────────────────────────────────
+    print(f"Loading {model_id} on GPU...")
+    hf_token = os.environ.get("HF_TOKEN")
+    llm_tok = AutoTokenizer.from_pretrained(model_id, token=hf_token)
+    model = AutoModelForCausalLM.from_pretrained(
+        model_id, device_map="auto", torch_dtype=torch.float16, token=hf_token,
+    )
+    model.eval()
+    print(f"Model loaded. Processing {len(records)} records (5 arms each)...")
+
+    # ── Helpers ────────────────────────────────────────────────────────────────
+    def build_prompt(context: str, question: str) -> str:
+        return (f"<|im_start|>system\nYou are a clinical assistant.<|im_end|>\n"
+                f"<|im_start|>user\nBased ONLY on the patient record below, "
+                f"answer the question briefly.\n\nPATIENT RECORD:\n"
+                f"{context}\n\nQUESTION: {question}<|im_end|>\n"
+                f"<|im_start|>assistant\n")
+
+    def generate(context: str, question: str,
+                 max_new_tokens: int = 128, ctx_token_limit: int = 32768) -> str:
+        prompt = build_prompt(context, question)
+        inputs = llm_tok(prompt, return_tensors="pt",
+                         truncation=True, max_length=ctx_token_limit).to(model.device)
+        with torch.no_grad():
+            out = model.generate(**inputs, max_new_tokens=max_new_tokens,
+                                 do_sample=False, temperature=1.0)
+        return llm_tok.decode(out[0][inputs["input_ids"].shape[1]:],
+                              skip_special_tokens=True).strip()
+
+    def score_response(response: str, expected: str) -> float:
+        r, e = response.lower(), expected.lower()
+        if e in r:
+            return 1.0
+        toks_e = set(re.findall(r'\w+', e))
+        toks_r = set(re.findall(r'\w+', r))
+        if toks_e and len(toks_e & toks_r) / len(toks_e) >= 0.5:
+            return 0.5
+        return 0.0
+
+    # ── Context builders ───────────────────────────────────────────────────────
+    xml_cache: dict = {}
+
+    def get_events(fname: str) -> list[dict]:
+        if fname not in xml_cache:
+            xml_path = EHR_DIR / fname
+            xml_cache[fname] = parse_ehr_sentences(xml_path) if xml_path.exists() else []
+        return xml_cache[fname]
+
+    def _bm25_compress_inner(events: list[dict], query: str,
+                              keep_top_k: int, filter_headers: bool) -> str:
+        """Shared BM25 logic; filter_headers controls header removal."""
+        ev = ([e for e in events if not _is_header(e["text"])]
+              if filter_headers else events)
+        if not ev:
+            ev = events  # fall back to unfiltered if all removed
+        recent_idx_set = {e["idx"] for e in events[-5:]}
+        corpus = [re.findall(r'\w+', e["text"].lower()) for e in ev]
+        bm25_idx = BM25Okapi(corpus) if any(corpus) else None
+        if bm25_idx is None:
+            kept = list(events[-keep_top_k:])
+        else:
+            q_toks = re.findall(r'\w+', query.lower())
+            scores = bm25_idx.get_scores(q_toks) if q_toks else [0.0] * len(ev)
+            scored = sorted(range(len(scores)), key=lambda i: -scores[i])
+            keep_pos = set(scored[:keep_top_k])
+            kept = [ev[i] for i in range(len(ev)) if i in keep_pos]
+            for e in events:  # add recency buffer from full list
+                if e["idx"] in recent_idx_set and e not in kept:
+                    kept.append(e)
+        kept.sort(key=lambda e: e["timestamp"])
+        return sentences_to_context(kept)
+
+    def dense_compress(events: list[dict], query: str, keep_top_k: int) -> str:
+        texts = [e["text"] for e in events]
+        q_emb   = encoder.encode([query], normalize_embeddings=True)
+        ev_embs = encoder.encode(texts, normalize_embeddings=True, batch_size=128)
+        sims    = (ev_embs @ q_emb.T).ravel()
+        recent_idx_set = {e["idx"] for e in events[-5:]}
+        top_pos = set(int(i) for i in np.argsort(sims)[-keep_top_k:])
+        top_pos |= {i for i, e in enumerate(events) if e["idx"] in recent_idx_set}
+        kept = [events[i] for i in range(len(events)) if i in top_pos]
+        kept.sort(key=lambda e: e["timestamp"])
+        return sentences_to_context(kept)
+
+    # ── Load any existing partial results (resume support) ────────────────────
+    _partial = _Path("/results/exp3_v3_llm_results.csv")
+    if _partial.exists():
+        existing = pd.read_csv(_partial)
+        results = existing.to_dict("records")
+        print(f"  Loaded {len(results)} existing rows from partial run")
+    else:
+        results = []
+
+    # ── Main inference loop ────────────────────────────────────────────────────
+    for i, rec in enumerate(records):
+        if (i + 1) % 10 == 0:
+            print(f"  {i+1}/{len(records)}")
+
+        fname   = rec["filename"]
+        events  = get_events(fname)
+        if not events:
             continue
-        events = parse_ehr_sentences(xml_path)
-        context_full = sentences_to_context(events)
 
-        patient_rows = df[df["filename"] == fname]
-        for _, row in patient_rows.head(3).iterrows():  # max 3 per patient
-            query = str(row.get("question", ""))
-            expected = str(row.get("clinician_response", ""))
+        question = rec["question"]
+        expected = rec.get("expected", "")
 
-            ctx_qccs, _ = qccs_compress(events, query, gate, tokenizer,
-                                         keep_top_k=20)
+        try:
+            ctx_full  = sentences_to_context(events, max_chars=400000)
+            ctx_qccs, _ = qccs_compress(events, question, gate, tok_fn,
+                                         keep_top_k=keep_top_k)
+            ctx_bm25  = _bm25_compress_inner(events, question, keep_top_k,
+                                              filter_headers=False)
+            ctx_bm25f = _bm25_compress_inner(events, question, keep_top_k,
+                                              filter_headers=True)
+            ctx_dense = dense_compress(events, question, keep_top_k)
 
-            pos_row = pos_df[
-                (pos_df["filename"] == fname) &
-                (pos_df["question"] == query)
-            ]
-            pos = float(pos_row["position"].iloc[0]) if len(pos_row) > 0 else float("nan")
+            bl_resp    = generate(ctx_full,  question, ctx_token_limit=16384)
+            qccs_resp  = generate(ctx_qccs,  question, ctx_token_limit=4096)
+            bm25_resp  = generate(ctx_bm25,  question, ctx_token_limit=4096)
+            bm25f_resp = generate(ctx_bm25f, question, ctx_token_limit=4096)
+            dns_resp   = generate(ctx_dense, question, ctx_token_limit=4096)
+        except Exception as exc:
+            print(f"  [ERROR] record {i} ({fname}): {exc} — skipping")
+            bl_resp = qccs_resp = bm25_resp = bm25f_resp = dns_resp = ""
 
-            records.append({"filename": fname, "question": query,
-                             "expected": expected, "position": pos,
-                             "context_full": context_full[:20000],  # pre-truncate for Modal payload limit
-                             "context_qccs": ctx_qccs[:20000]})
+        results.append({
+            "filename":                fname,
+            "question":                question[:100],
+            "position":                rec.get("position", float("nan")),
+            "baseline_correct":        score_response(bl_resp,    expected),
+            "qccs_correct":            score_response(qccs_resp,  expected),
+            "bm25_correct":            score_response(bm25_resp,  expected),
+            "bm25_filtered_correct":   score_response(bm25f_resp, expected),
+            "dense_correct":           score_response(dns_resp,   expected),
+            "baseline_response":       bl_resp[:200],
+            "qccs_response":           qccs_resp[:200],
+            "bm25_response":           bm25_resp[:200],
+            "bm25_filtered_response":  bm25f_resp[:200],
+            "dense_response":          dns_resp[:200],
+        })
 
-    print(f"Dispatching {len(records)} records to Modal A100...")
-    results = run_llm_inference.remote(records)
-    print(f"Done. Results: {len(results)} rows")
+        if len(results) % 10 == 0:
+            pd.DataFrame(results).to_csv("/results/exp3_v3_llm_results.csv", index=False)
+            results_vol.commit()
+            print(f"  [checkpoint] {len(results)} rows saved")
 
-    pd.DataFrame(results).to_csv(
-        OUT_D / "exp3_llm_inference_results.csv", index=False)
-    print(f"Saved to {OUT_D / 'exp3_llm_inference_results.csv'}")
+    pd.DataFrame(results).to_csv("/results/exp3_v3_llm_results.csv", index=False)
+    results_vol.commit()
+    print(f"Saved {len(results)} rows to /results/exp3_v3_llm_results.csv")
+    return results
+
+
+@app.local_entrypoint()
+def run_llm_v3_entrypoint():
+    """
+    Five-arm LLM evaluation: Full / QCCS / BM25 / BM25-filtered / Dense.
+
+    Run: modal run modal_app.py::run_llm_v3_entrypoint
+    Download: modal volume get clinical-litm-results exp3_v3_llm_results.csv <local_path>
+    """
+    import pandas as pd
+    from sklearn.model_selection import train_test_split
+
+    BASE  = LOCAL_ROOT / "data" / "medalign" / "MedAlign_files"
+    TSV   = BASE / "medalign_instructions_v1_3" / "clinician-reviewed-model-responses.tsv"
+    OUT_D = LOCAL_FIGURES
+
+    df = pd.read_csv(TSV, sep="\t").dropna(subset=["question", "evidence", "filename"])
+    patients = df["filename"].unique()
+    _, test_patients = train_test_split(patients, test_size=0.30, random_state=42)
+    df_test = (df[df["filename"].isin(set(test_patients))]
+               .drop_duplicates(subset=["filename", "question"]))
+    print(f"Test split: {len(test_patients)} patients, {len(df_test)} unique instructions")
+
+    pos_df = pd.read_csv(OUT_D / "exp1_litm_results.csv")
+
+    # Resume: skip records already saved in a partial run
+    partial_path = OUT_D / "exp3_v3_llm_results.csv"
+    done_keys: set = set()
+    if partial_path.exists():
+        done_df = pd.read_csv(partial_path)
+        done_keys = set(zip(done_df["filename"].astype(str),
+                            done_df["question"].astype(str).str[:100]))
+        print(f"Resuming: {len(done_keys)} records already done")
+
+    records = []
+    for _, row in df_test.iterrows():
+        fname    = str(row["filename"])
+        question = str(row["question"])
+        if (fname, question[:100]) in done_keys:
+            continue
+        expected = str(row.get("evidence", "")).strip()
+        pos_row  = pos_df[(pos_df["filename"] == fname) &
+                          (pos_df["question"]  == question)]
+        pos = float(pos_row["position"].iloc[0]) if len(pos_row) > 0 else float("nan")
+        records.append({"filename": fname, "question": question,
+                        "expected": expected, "position": pos})
+
+    print(f"Dispatching {len(records)} remaining records (5 arms × {len(records)} = "
+          f"{len(records)*5} LLM calls) to A100...")
+    handle = run_llm_inference_v3.spawn(records)
+    print(f"Spawned job: {handle.object_id}")
+    print("Download when done:")
+    print(f"  modal volume get clinical-litm-results exp3_v3_llm_results.csv "
+          f"{OUT_D}/exp3_v3_llm_results.csv")
