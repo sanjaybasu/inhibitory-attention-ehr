@@ -1,0 +1,5 @@
+task,model,test_auroc,test_auprc
+lab_anemia,QCCS-DiffTransformer (Eq.3),0.7768659249171209,0.8695460903128642
+lab_hyperkalemia,QCCS-DiffTransformer (Eq.3),0.5,0.02374395296435984
+lab_hyponatremia,QCCS-DiffTransformer (Eq.3),0.6099377766793848,0.3620628710808214
+lab_thrombocytopenia,QCCS-DiffTransformer (Eq.3),0.7504922493263839,0.6374526188455754

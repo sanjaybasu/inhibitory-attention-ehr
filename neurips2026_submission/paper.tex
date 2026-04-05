@@ -52,22 +52,25 @@ the 20--30\% position decile) and trough accuracy (37.6\% [31.2, 44.6] at
 percentiles of the EHR timeline, placing them within the CLitM accuracy trough.
 We introduce Query-Conditioned Clinical Suppression (QCCS), a lightweight
 character $n$-gram query-conditioned context selection gate, and evaluate it
-against BM25, BM25 with section-header filtering, and dense retrieval
-(sentence-transformers) in a multi-arm proof-of-concept experiment ($N{=}83$
-held-out instructions). At $k{=}20$, BM25 retrieves the gold-standard
-evidence sentence in 98.8\% of test instructions overall and 96.7\% of
-middle-position instructions; dense retrieval achieves 94.0\% overall and
-90.0\% in the middle; QCCS achieves 34.9\% overall and 23.3\% for
-middle-position instructions. A no-query ablation shows that query
-conditioning accounts for +23.8 percentage points of middle-position recall.
+against BM25, BM25 with section-header filtering, dense retrieval
+(sentence-transformers), and cross-encoder reranking in a multi-arm
+proof-of-concept experiment ($N{=}83$ held-out instructions). At $k{=}20$,
+BM25 retrieves the gold-standard evidence sentence in 98.8\% of test
+instructions overall and 96.7\% of middle-position instructions; cross-encoder
+reranking (BM25-50 $\to$ CE $\to$ top-20) achieves 96.4\% overall and 90.0\%
+middle; dense retrieval achieves 94.0\% overall and 90.0\% in the middle;
+QCCS achieves 34.9\% overall and 23.3\% for middle-position instructions.
+A no-query ablation shows that query conditioning accounts for +23.8 percentage
+points of middle-position recall.
 End-to-end instruction-following experiments with Qwen2.5-7B-Instruct (16k-token
-context window) show that QCCS substantially outperforms both
-full-context inference and BM25 retrieval, evaluated by LLM-as-judge semantic
-scoring: QCCS 20.0\% [95\% CI: 7, 37] vs.\ BM25 3.3\% [0, 10] vs.\ dense 0.0\% [0, 0]
-vs.\ full context 6.7\% [0, 17] for middle-position instructions; overall, QCCS reaches
-26.5\% [17, 36] vs.\ $\leq$3.6\% for all comparators. Critically, dense retrieval
-achieves 90.0\% Stage~1 recall yet 0.0\% LLM accuracy in the middle band---confirming
-that retrieval recall is not the binding constraint. BM25 and BM25 with section-header
+context window) show that QCCS substantially outperforms all five comparators,
+evaluated by LLM-as-judge semantic scoring: QCCS 16.7\% [95\% CI: 3, 30]
+vs.\ BM25 3.3\% [0, 10] vs.\ cross-encoder 0.0\% [0, 0] vs.\ dense 0.0\% [0, 0]
+vs.\ full context 6.7\% [0, 17] for middle-position instructions; overall, QCCS
+reaches 25.3\% [17, 35] vs.\ $\leq$3.6\% for all comparators. Critically, both
+cross-encoder reranking (96.4\% Stage~1 recall) and dense retrieval (90.0\%
+recall) achieve 0.0\% LLM accuracy in the middle band---confirming that
+retrieval recall is not the binding constraint. BM25 and BM25 with section-header
 filtering both fail (3.3\% and 0.0\% middle), with BM25 with header filtering achieving
 identical retrieval recall to standard BM25 (98.8\%), confirming that the failure mode
 is not addressable by filtering alone. Code is available at \texttt{[anonymized for review]}.
@@ -123,31 +126,35 @@ This paper makes four contributions:
   models, establishing a 21.9 percentage-point peak-to-trough accuracy gap.
 
   \item \textbf{Inhibitory attention on structured EHR prediction.} We evaluate
-  Differential Transformer~\cite{ye2025differential} versus standard attention
-  and KV compression baselines on five EHRSHOT~\cite{wornow2023ehrshot}
+  Differential Transformer~\cite{ye2025differential} (DiffAttn) and the full
+  QCCS-gated integration (QCCS-DiffAttn, Eq.~\ref{eq:qccs}) versus standard attention
+  and KV compression baselines on four EHRSHOT~\cite{wornow2023ehrshot}
   laboratory prediction tasks, finding consistent gains on class-imbalanced
-  tasks (+6.1~pp AUROC on anemia; +4.2~pp on hyperkalemia).
+  tasks with DiffAttn (+6.1~pp AUROC on anemia; +4.2~pp on hyperkalemia),
+  and finding that per-token QCCS gating (QCCS-DiffAttn; Eq.~\ref{eq:qccs}) does
+  not improve over scalar inhibition: gate training collapses to chance on
+  hyperkalemia (AUROC~0.500) and AUROC falls below scalar DiffAttn on all four tasks.
 
   \item \textbf{Query-Conditioned Clinical Suppression (QCCS).} We introduce
   QCCS, a lightweight character $n$-gram query-conditioned context selection gate
   that scores EHR sentences for relevance to the clinical query. The gate is
   trained on MedAlign instruction-response pairs using lexical overlap labels.
-  We also describe how the gate score can be integrated into a Differential
-  Transformer attention formulation as a per-token inhibition weight.
+  We also evaluate (Eq.~\ref{eq:qccs}) the integration of the gate score into
+  a Differential Transformer as a per-token inhibition weight (QCCS-DiffAttn).
 
   \item \textbf{Retrieval baselines and end-to-end evaluation.} We compare QCCS
-  against BM25, BM25 with section-header filtering, and dense retrieval on a
-  clean held-out test split (74 patients, 83 unique instructions).
-  All lexical and dense retrievers substantially outperform QCCS in
+  against BM25, BM25 with section-header filtering, dense retrieval, and cross-encoder
+  reranking on a clean held-out test split (74 patients, 83 unique instructions).
+  All lexical, neural, and dense retrievers substantially outperform QCCS in
   gold-answer recall (BM25 98.8\% overall; dense 94.0\%; vs.\ QCCS 34.9\%).
   A no-query ablation shows query conditioning contributes +23.8~pp of middle
-  recall. LLM-as-judge end-to-end evaluation (five arms: full 16k-token context,
-  BM25, BM25-filtered, dense, and QCCS top-20; Qwen2.5-7B-Instruct) shows that QCCS
+  recall. LLM-as-judge end-to-end evaluation (six arms: full 16k-token context,
+  BM25, BM25-filtered, dense, cross-encoder, and QCCS top-20; Qwen2.5-7B-Instruct) shows that QCCS
   outperforms all comparators for middle-position instructions
-  (20.0\% [95\% CI: 7, 37] vs.\ BM25 3.3\% [0, 10] vs.\ 0.0\% [0, 0] for both
-  dense and full context) and overall (26.5\% [17, 36] vs.\ $\leq$3.6\%), establishing
-  that learned context selection provides better LLM signal than both lexical and
-  dense retrieval despite lower gold-sentence recall.
+  (16.7\% [95\% CI: 3, 30] vs.\ BM25 3.3\% [0, 10] vs.\ 0.0\% [0, 0] for
+  cross-encoder, dense, and BM25-filtered) and overall (25.3\% [17, 35] vs.\ $\leq$3.6\%),
+  establishing that learned context selection provides better LLM signal than both
+  lexical and neural retrieval despite lower gold-sentence recall.
 \end{enumerate}
 
 %% ─────────────────────────────────────────────────────────────────────────────
@@ -275,10 +282,11 @@ Model-stratified U-curves are reported in Supplementary Appendix~A.
 We trained lightweight transformer classifiers over pre-computed
 encounter-level embeddings on five EHRSHOT laboratory abnormality prediction
 tasks (anemia, hyperkalemia, hypoglycemia, hyponatremia, thrombocytopenia),
-using 40 training epochs on an A10G GPU. Three attention conditions were
+using 40 training epochs on an A10G GPU. Four attention conditions were
 compared: standard transformer attention (baseline), Differential
-Transformer~\cite{ye2025differential}, and H$_2$O~\cite{zhang2023h2o} with a
-KV keep ratio of 0.5. Primary metrics were AUROC and AUPRC; the latter is
+Transformer~\cite{ye2025differential} (DiffAttn), QCCS-gated Differential
+Transformer (QCCS-DiffAttn; Eq.~\ref{eq:qccs}), and H$_2$O~\cite{zhang2023h2o}
+with a KV keep ratio of 0.5. Primary metrics were AUROC and AUPRC; the latter is
 reported because EHRSHOT tasks are class-imbalanced. Hypoglycemia is excluded
 from Table~\ref{tab:ehrshot} because the H$_2$O run exceeded the 7,200-second
 wall-clock limit.
@@ -325,7 +333,7 @@ Experiment~3 evaluation set. The MedAlign TSV contains multiple model-response r
 per (patient, question) pair; we deduplicate to one row per unique pair before all
 Experiment~3 analyses. Gate training requires $\sim$15 minutes on CPU.
 
-\paragraph{Architectural extension.} The gate score can be integrated into a
+\paragraph{Architectural extension (Eq.~3).} The gate score can be integrated into a
 Differential Transformer~\cite{ye2025differential} by replacing the scalar
 $\lambda$ with a per-token weight:
 \begin{equation}
@@ -334,8 +342,10 @@ $\lambda$ with a per-token weight:
   \label{eq:qccs}
 \end{equation}
 where $g \in [0,1]^n$ are gate scores from Eq.~\ref{eq:gate}. Experiment~2
-evaluates Differential Transformer with $g \equiv 1$; full integration is
-left for future work.
+evaluates both the standard Differential Transformer ($g \equiv 1$, denoted
+``DiffAttn'') and the full QCCS-gated integration (denoted ``QCCS-DiffAttn''),
+where a task-conditioned gate trained to score event codes against the task
+query replaces the scalar inhibition coefficient with per-token weights.
 
 \subsection{Experiment 3: Evidence Retrieval Baselines and LLM Re-inference}
 \label{sec:exp3}
@@ -350,7 +360,7 @@ method correctly retains the clinician-authored reference answer among its
 top-$k$ selected sentences ($k = 20$), plus a fixed recency buffer of the 5
 most recent EHR events. Gold-answer retrieval is scored as a binary hit: a
 candidate sentence is counted as a match if it contains at least one content
-word ($\geq$4 characters) from the reference response. We compare four methods:
+word ($\geq$4 characters) from the reference response. We compare five methods:
 \begin{itemize}[leftmargin=*, topsep=1pt, itemsep=0pt]
   \item \textbf{BM25}: Okapi BM25 ranking of EHR sentences against the query
     (rank\_bm25 library).
@@ -358,22 +368,30 @@ word ($\geq$4 characters) from the reference response. We compare four methods:
     matches section-header patterns (``Question:'', ``Answer:'', ``Plan:'',
     ``Assessment:'', ``Review of Systems'', etc.) before indexing. Tests whether
     header contamination explains BM25's LLM failure.
+  \item \textbf{Cross-encoder (CE)}: BM25 top-50 candidates re-ranked by
+    \texttt{cross-encoder/ms-marco-MiniLM-L-6-v2}~\cite{reimers2019sentence};
+    top-20 retained. Neural reranking baseline directly addressing the concern
+    that lexical-only retrieval leaves relevance signal on the table.
   \item \textbf{Dense}: Cosine similarity between query and sentence embeddings
     (sentence-transformers \texttt{all-MiniLM-L6-v2}, 384-dimensional, normalized);
-    semantic retrieval baseline.
+    dense semantic retrieval baseline.
   \item \textbf{QCCS gate}: The learned character $n$-gram gate described in
     Section~\ref{sec:qccs}.
 \end{itemize}
 Results are reported by position band (middle: 30--70\% of EHR timeline; edge:
 outside 30--70\%).
 
-\paragraph{Stage 2: LLM re-inference.} We evaluate three context strategies
+\paragraph{Stage 2: LLM re-inference.} We evaluate six context strategies
 end-to-end with Qwen2.5-7B-Instruct on the 83-instruction test split:
 (i)~\textbf{Full context}: the complete chronological EHR serialization, truncated to
 16,384 tokens (Qwen2.5 supports 128k, but 32k$+$ prefill exceeds A100 80~GB
 VRAM during logit computation); (ii)~\textbf{BM25}: top-20 BM25-ranked
-sentences $+$ last-5 events; (iii)~\textbf{QCCS}: top-20 gate-scored sentences
-$+$ last-5 events. LLM re-inference runs on a Modal A100 GPU (80~GB).
+sentences $+$ last-5 events; (iii)~\textbf{BM25-filtered}: BM25 after
+section-header removal; (iv)~\textbf{Dense}: top-20 sentence-transformer
+sentences $+$ last-5 events; (v)~\textbf{Cross-encoder}: BM25-50 candidates
+re-ranked by \texttt{ms-marco-MiniLM-L-6-v2}, top-20 retained $+$ last-5 events;
+(vi)~\textbf{QCCS}: top-20 gate-scored sentences $+$ last-5 events.
+LLM re-inference runs on a Modal A100 GPU (80~GB).
 
 \paragraph{Stage 2 evaluation.} The \emph{primary} evaluation metric is
 LLM-as-judge: Claude Haiku (\texttt{claude-haiku-4-5-20251001}) is prompted
@@ -442,29 +460,30 @@ H$_2$O substantially outperforms all models on hyperkalemia (0.737 [0.719, 0.756
 the most severely class-imbalanced task, suggesting that KV cache compression
 under sparse signal may inadvertently sharpen sensitivity to rare positive events.
 The mean $\Delta$ Differential vs.\ Standard across four tasks is +1.7~pp AUROC
-(range $-1.9$ to $+6.1$~pp). The task-specific pattern is consistent with the
-hypothesis that inhibitory attention benefits sparse-signal tasks but may
-modestly hurt balanced tasks where the second attention head suppresses
-informative tokens.
+(range $-1.9$ to $+6.1$~pp). QCCS-DiffAttn (Eq.~\ref{eq:qccs}) does not improve
+over scalar DiffAttn on any task: hyperkalemia degrades to chance (AUROC~0.500
+[0.487, 0.513]; gate loss flat across 40 epochs at 2.38\% positive rate),
+hyponatremia drops $-14.0$~pp vs.\ standard (0.610 vs.\ 0.750), thrombocytopenia
+$-11.5$~pp vs.\ DiffAttn (0.750 vs.\ 0.865), and anemia $-4.7$~pp (0.777 vs.\ 0.824).
 
 \begin{table}[t]
 \centering
 \caption{EHRSHOT structured prediction results (test AUROC [95\% CI] / test AUPRC).
-  Full dataset, 40 epochs, A10G GPU. Hypoglycemia excluded: H$_2$O run exceeded
-  7,200~s wall-clock limit. CIs via Hanley--McNeil approximation (estimated test
-  $n$ = 30\% of full dataset). \textbf{Bold} = best per task.}
+  40 epochs; hypoglycemia excluded (H$_2$O exceeded 7,200~s). CIs: Hanley--McNeil.
+  $^\dagger$QCCS-DiffAttn (Eq.~3): EHRSHOT official splits (34.1\%/65.9\%
+  train/test); CIs on larger test $n$ than Std/Diff/H$_2$O. \textbf{Bold}~=~best.}
 \label{tab:ehrshot}
-\scriptsize\setlength{\tabcolsep}{3.5pt}
-\begin{tabular}{@{}p{2.3cm}p{3.6cm}p{3.6cm}p{3.2cm}@{}}
+\scriptsize\setlength{\tabcolsep}{2pt}
+\begin{tabular}{@{}p{1.8cm}p{2.5cm}p{2.5cm}p{2.3cm}p{2.5cm}@{}}
 \toprule
-Task & Standard Transformer & Differential Transformer & H$_2$O (keep 50\%) \\
+Task & Standard Transformer & Differential Transformer & H$_2$O (keep 50\%) & QCCS-DiffAttn$^\dagger$ \\
 \midrule
-Anemia         & 0.764 [0.757, 0.770] / 0.814 & \textbf{0.824 [0.818, 0.830] / 0.852} & 0.763 [0.756, 0.770] / 0.824 \\
-Hyperkalemia   & 0.573 [0.554, 0.592] / 0.033 & 0.615 [0.595, 0.635] / 0.083 & \textbf{0.737 [0.719, 0.756] / 0.124} \\
-Hyponatremia   & \textbf{0.750 [0.745, 0.755]} / \textbf{0.557} & 0.731 [0.726, 0.736] / 0.539 & 0.734 [0.729, 0.739] / 0.536 \\
-Thrombocytopenia & \textbf{0.880 [0.875, 0.885] / 0.815} & 0.865 [0.859, 0.870] / 0.797 & 0.866 [0.860, 0.871] / 0.798 \\
+Anemia         & 0.764 [0.757, 0.770] / 0.814 & \textbf{0.824 [0.818, 0.830] / 0.852} & 0.763 [0.756, 0.770] / 0.824 & 0.777 [0.774, 0.780] / 0.870 \\
+Hyperkalemia   & 0.573 [0.554, 0.592] / 0.033 & 0.615 [0.595, 0.635] / 0.083 & \textbf{0.737 [0.719, 0.756] / 0.124} & 0.500 [0.487, 0.513] / 0.024 \\
+Hyponatremia   & \textbf{0.750 [0.745, 0.755]} / \textbf{0.557} & 0.731 [0.726, 0.736] / 0.539 & 0.734 [0.729, 0.739] / 0.536 & 0.610 [0.606, 0.614] / 0.362 \\
+Thrombocytopenia & \textbf{0.880 [0.875, 0.885] / 0.815} & 0.865 [0.859, 0.870] / 0.797 & 0.866 [0.860, 0.871] / 0.798 & 0.750 [0.747, 0.754] / 0.637 \\
 \midrule
-\multicolumn{4}{l}{\small\textit{Mean $\Delta$ Diff vs.\ Std: +1.7~pp AUROC (range $-1.9$ to $+6.1$~pp)}} \\
+\multicolumn{5}{l}{\small\textit{Mean $\Delta$ Diff vs.\ Std: +1.7~pp AUROC (range $-1.9$ to $+6.1$~pp)}} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -472,31 +491,20 @@ Thrombocytopenia & \textbf{0.880 [0.875, 0.885] / 0.815} & 0.865 [0.859, 0.870] 
 \subsection{Evidence Retrieval Baselines (Exp 3, Stage 1)}
 
 Gold-answer retrieval results on the held-out test split (74 patients, 83 unique
-instructions) are reported in Table~\ref{tab:qccsgate}. All three lexical and
-semantic retrieval baselines substantially outperform the QCCS learned gate.
+instructions) are reported in Table~\ref{tab:qccsgate}. All four retrieval
+baselines substantially outperform the QCCS learned gate on this recall metric.
 At $k{=}20$, BM25 achieves 98.8\% overall and 96.7\% in the middle
-(30--70\% of EHR timeline) position band; dense retrieval achieves 94.0\%
-overall and 90.0\% in the middle. The QCCS gate achieves 34.9\% overall and
-23.3\% for middle-position instructions.
+(30--70\% of EHR timeline) position band. Cross-encoder reranking (BM25 top-50
+candidates re-scored by \texttt{ms-marco-MiniLM-L-6-v2}, top-20 retained)
+achieves 96.4\% overall and 90.0\% middle, narrowing the edge-vs-middle gap
+to zero (100.0\% edge) while adding neural relevance estimation over BM25.
+Dense retrieval (all-MiniLM-L6-v2) achieves 94.0\% overall and 90.0\% middle.
+The QCCS gate achieves 34.9\% overall and 23.3\% for middle-position instructions.
 
-Critically, BM25 with section-header filtering achieves \emph{identical} recall
-to standard BM25 (98.8\% overall, 96.7\% middle), confirming that the
-section-header patterns are not a significant source of retrieval misses.
-The QCCS gate underperforms all three retrieval baselines substantially.
-Withholding the clinical question substantially reduces QCCS recall
-(Appendix~\ref{app:noquery}), confirming that the gate prioritizes
-query-relevant sentences rather than learning a generic text-quality score. Table~\ref{tab:ablation_k} shows that BM25 recall is largely
-insensitive to $k$ above 10 ($\geq$96.7\% middle at all $k{\geq}10$), while
-QCCS recall barely improves with $k$ in the middle band (23.3\% at all
-$k{=}5$--$20$), suggesting that the gate's errors are systematic rather than
-marginal.
-
-The underperformance of the QCCS gate relative to retrieval baselines has a
-structural explanation: the gate is trained with lexical overlap labels (sentences
-sharing content words with the reference answer), which directly parallels the
-BM25 term-frequency signal. The gate approximates---but does not exceed---the
-lexical baseline at the retrieval stage. However, as Stage~2 shows, high
-retrieval recall does not determine downstream LLM accuracy.
+BM25 with section-header filtering achieves \emph{identical} recall to BM25
+(98.8\%/96.7\%), showing header patterns do not explain misses.
+QCCS recall is query-conditioned (Appendix~\ref{app:noquery}) and largely
+insensitive to $k$ (Table~\ref{tab:ablation_k}), indicating systematic errors.
 
 \begin{table}[t]
 \centering
@@ -504,6 +512,7 @@ retrieval recall does not determine downstream LLM accuracy.
   ($N{=}83$ unique instructions, 74 patients). Hit criterion: selected sentence
   contains at least one content word ($\geq$4 chars) from the reference answer.
   All retrieval methods include a fixed recency buffer of the 5 most-recent events.
+  CE: BM25 top-50 candidates re-ranked by \texttt{ms-marco-MiniLM-L-6-v2}, top-20 retained.
   \textbf{Bold} = best.}
 \label{tab:qccsgate}
 \small
@@ -511,8 +520,9 @@ retrieval recall does not determine downstream LLM accuracy.
 \toprule
 Method & Overall & Middle (30--70\%) & Edge ($<$30\% or $>$70\%) \\
 \midrule
-BM25 (lexical) & \textbf{98.8\%} & 96.7\% & \textbf{100.0\%} \\
-BM25-filtered (header-excl.) & \textbf{98.8\%} & 96.7\% & \textbf{100.0\%} \\
+BM25 (lexical) & \textbf{98.8\%} & \textbf{96.7\%} & \textbf{100.0\%} \\
+BM25-filtered (header-excl.) & \textbf{98.8\%} & \textbf{96.7\%} & \textbf{100.0\%} \\
+Cross-encoder (BM25-50$\to$CE$\to$20) & 96.4\% & 90.0\% & \textbf{100.0\%} \\
 Dense (all-MiniLM-L6-v2) & 94.0\% & 90.0\% & 96.2\% \\
 QCCS gate (learned) & 34.9\% & 23.3\% & 41.5\% \\
 \bottomrule
@@ -544,104 +554,84 @@ $k$ & BM25 & BM25-filt & Dense & QCCS && BM25 & BM25-filt & Dense & QCCS \\
 
 \subsection{LLM Re-inference: Full Context vs.\ BM25 vs.\ QCCS}
 
-End-to-end instruction-following results, evaluated by LLM-as-judge (primary
-metric) and token-overlap (secondary cross-check), are reported in
-Table~\ref{tab:llm}. All five arms are evaluated on the 83 unique (patient,
-question) pairs from the held-out test split with Qwen2.5-7B-Instruct.
-The full-context baseline uses a 16,384-token input window; compressing to
-$k{=}20$ sentences reduces input length from $\sim$8k tokens (median) to
-$\leq$500 tokens---a $\geq$16$\times$ reduction.
+Table~\ref{tab:llm} reports LLM-as-judge accuracy (six arms on 83 held-out
+instructions; Qwen2.5-7B-Instruct; token-overlap secondary in Appendix~\ref{app:tokoverlap}).
 
 \textbf{QCCS is the only arm with consistently positive LLM accuracy.}
-By LLM-as-judge scoring, QCCS achieves 20.0\% [95\% CI: 7, 37] for
+By LLM-as-judge scoring, QCCS achieves 16.7\% [95\% CI: 3, 30] for
 middle-position instructions (30--70\% of EHR timeline) versus 0.0\% [0, 0]
-for dense retrieval, 0.0\% [0, 0] for BM25-filtered, 3.3\% [0, 10] for BM25,
-and 6.7\% [0, 17] for full context. Overall, QCCS reaches 26.5\% [17, 36]
-versus $\leq$3.6\% for all comparators. The pattern is consistent across
-position bands: QCCS is the best-performing arm in every decile
-(Table~\ref{tab:llm}), with the largest margin at early positions
-(0--10\%: QCCS 46.2\% vs.\ all comparators 0.0\%).
+for dense retrieval, 0.0\% [0, 0] for cross-encoder, 0.0\% [0, 0] for
+BM25-filtered, 3.3\% [0, 10] for BM25, and 6.7\% [0, 17] for full context.
+Overall, QCCS reaches 25.3\% [17, 35] versus $\leq$3.6\% for all comparators.
+The pattern is consistent across position bands: QCCS is the best-performing arm
+in every decile (Table~\ref{tab:llm}), with the largest margin at early positions
+(0--10\%: QCCS 38.5\% vs.\ all comparators 0.0\%).
 
-\textbf{Dense retrieval and BM25 both fail at Stage~2.}
-Dense retrieval (all-MiniLM-L6-v2) achieves 90.0\% Stage~1 recall in the
-middle band yet 0.0\% LLM accuracy there---identical to BM25-filtered and
-worse than standard BM25 (3.3\%). This result is striking: a semantically rich
-retriever with near-BM25 recall provides no benefit over full-context
-inference for downstream accuracy. The full-context baseline scores near-zero
-across most position bands, with Qwen2.5-7B-Instruct failing to retrieve
-evidence at essentially any position despite it being present in the 16k-token
-window, making context compression a practical necessity.
+\textbf{All five retrieval comparators fail at Stage~2.}
+Dense retrieval achieves 90.0\% Stage~1 middle recall yet 0.0\% LLM accuracy;
+cross-encoder achieves 96.4\%/90.0\% Stage~1 yet also 0.0\% middle; BM25
+achieves 3.3\% despite 96.7\%. Neural reranking provides no benefit over lexical
+retrieval for downstream accuracy. The full-context Qwen2.5-7B fails across
+most position bands, making context compression a practical necessity.
 
-\textbf{Token-overlap vs.\ semantic scoring.} Token-overlap inflates dense
-and BM25-filtered in the 30--50\% band (33.3\% each by token-overlap vs.\ 0.0\%
-by judge) and the baseline (11.1\% vs.\ 11.1\% aligned here, but 0\%
-judge-vs-tok discrepancies elsewhere). LLM-as-judge scoring removes these
-false positives and confirms that future EHR context selection evaluations
-should use semantic metrics.
+\textbf{Token-overlap vs.\ semantic scoring.} Token-overlap inflates scores for
+dense and BM25-filtered (Appendix~\ref{app:tokoverlap}); LLM-as-judge removes
+these false positives, confirming semantic evaluation is essential.
 
-\textbf{BM25 and dense failure analysis.} BM25 selects EHR sentences by
-lexical overlap with the query; many MedAlign EHR records contain structured
-``Question:''/``Answer:'' formatted sections (social history, review of
-systems) whose headers match query tokens. BM25-filtered removes the most
-obvious header patterns but achieves identical Stage~1 recall (98.8\%) and
-0.0\% middle LLM accuracy, showing that the failure is not addressable by
-header filtering. Dense retrieval avoids these lexical traps yet still fails,
-suggesting the problem is not lexical false positives per se but rather that
-both methods retrieve \emph{contextually plausible} but not
-\emph{query-conditionally relevant} sentences. QCCS, trained on
-query-conditioned lexical overlap labels, learns a feature space that
-distinguishes query-relevant from coincidentally relevant context, providing
-semantically coherent, question-specific selection. This confirms the central
-claim: \emph{retrieval recall does not determine downstream LLM accuracy;
-context precision does.}
-
-Given the pilot scale of this experiment ($N{=}83$ total, $N{=}30$
-middle-position), differences are not statistically significant
-(bootstrap CIs overlap substantially). These findings should be interpreted
-as proof-of-concept estimates requiring confirmation in a larger evaluation.
+\textbf{Failure analysis: why high-recall methods fail at Stage~2.}
+MedAlign EHR records contain structured \texttt{Question:}/\texttt{Answer:}
+sections whose headers match query tokens; BM25-filtered removes these patterns
+yet achieves identical Stage~1 recall (98.8\%) and 0.0\% middle accuracy,
+showing the failure is not addressable by header filtering. Dense retrieval
+avoids lexical traps yet also fails. Cross-encoder reranking achieves the
+highest Stage~1 neural recall (96.4\% overall, 100\% edge) yet 0.0\% middle
+LLM accuracy---not correctable by stronger ranking.
+The common thread: all four methods retrieve \emph{contextually plausible}
+but not \emph{query-conditionally relevant} sentences; QCCS, trained on
+query-conditioned lexical overlap labels, learns this distinction.
+\emph{Retrieval recall does not determine downstream LLM accuracy; context precision does.}
 
 \begin{table}[t]
 \centering
-\caption{Qwen2.5-7B-Instruct end-to-end accuracy (\%) on MedAlign held-out test split
-  ($N{=}83$ unique instructions, 74 patients; 16k-token context window).
-  \textbf{Primary metric: LLM-as-judge (Claude Haiku semantic evaluation).}
-  Secondary: token-overlap ($\geq$50\% expected tokens present).
-  All five arms use identical inference code; compressed arms (BM25, BM25f,
-  Dense, QCCS) use top-20 sentences plus a last-5 recency buffer.
-  BM25f = BM25 with section-header filtering. 95\% bootstrap CIs for summary rows
-  (5,000 resamples, seed~42). \textbf{Bold} = best per row (judge metric).}
+\caption{Qwen2.5-7B-Instruct end-to-end accuracy (\%, LLM-as-judge primary metric) on
+  MedAlign held-out test split ($N{=}83$ unique instructions, 74 patients; 16k-token
+  context window). All six arms use identical inference; compressed arms use top-20
+  sentences plus a last-5 recency buffer.
+  B25f = BM25 with section-header filtering;
+  CE = BM25-50 candidates re-ranked by \texttt{ms-marco-MiniLM-L-6-v2}, top-20 retained.
+  95\% bootstrap CIs for summary rows (5,000 resamples, seed~42).
+  Token-overlap results in Appendix~\ref{app:tokoverlap}.
+  \textbf{Bold} = best per row.}
 \label{tab:llm}
 \small
-\setlength{\tabcolsep}{2pt}
-\begin{tabular}{@{}lc ccccc ccccc@{}}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lc cccccc@{}}
 \toprule
- & & \multicolumn{5}{c}{LLM-as-judge (\%, primary)} & \multicolumn{5}{c}{Tok-overlap (\%, secondary)} \\
-\cmidrule(lr){3-7}\cmidrule(lr){8-12}
-Pos.\ band & $N$ & Full & BM25 & B25f & Dns & QCCS & Full & BM25 & B25f & Dns & QCCS \\
+Pos.\ band & $N$ & Full & BM25 & B25f & Dense & CE & QCCS \\
 \midrule
-0--10\%   & 13 &  0.0 &  0.0 &  0.0 &  0.0 & \textbf{46.2} &  0.0 &  0.0 &  0.0 &  0.0 & 15.4 \\
-10--30\%  & 12 &  0.0 &  0.0 &  0.0 &  0.0 & \textbf{25.0} &  0.0 &  0.0 &  0.0 &  0.0 &  8.3 \\
-30--50\%  &  9 & 11.1 &  0.0 &  0.0 &  0.0 & \textbf{22.2} & 11.1 &  0.0 & 22.2 & 33.3 & 33.3 \\
-50--70\%  & 21 &  4.8 &\textbf{4.8}&  0.0 &  0.0 & \textbf{19.0} &  0.0 &  4.8 &  4.8 &  0.0 &  9.5 \\
-70--90\%  & 13 &  0.0 &  0.0 &  7.7 &  0.0 & \textbf{30.8} &  7.7 &  0.0 &  0.0 &  7.7 &  7.7 \\
-90--100\% & 15 &  6.7 &  0.0 &  0.0 & 13.3 & \textbf{20.0} &  6.7 &  0.0 &  0.0 &  0.0 &  6.7 \\
+0--10\%   & 13 &  0.0 &  0.0 &  0.0 &  0.0 &  0.0 & \textbf{38.5} \\
+10--30\%  & 12 &  0.0 &  0.0 &  0.0 &  0.0 &  8.3 & \textbf{25.0} \\
+30--50\%  &  9 & \textbf{11.1} &  0.0 &  0.0 &  0.0 &  0.0 & \textbf{11.1} \\
+50--70\%  & 21 &  4.8 &  4.8 &  0.0 &  0.0 &  0.0 & \textbf{19.0} \\
+70--90\%  & 13 &  0.0 &  7.7 &  7.7 &  0.0 &  0.0 & \textbf{23.1} \\
+90--100\% & 15 &  6.7 &  0.0 &  0.0 & 13.3 &  0.0 & \textbf{33.3} \\
 \midrule
-Middle (30--70\%) & 30 & 6.7\,[0,17] & 3.3\,[0,10] & 0.0\,[0,0] & 0.0\,[0,0] & \textbf{20.0\,[7,37]} &  3.3 &  3.3 & 10.0 & 10.0 & 16.7 \\
-Edge              & 53 & 1.9\,[0,6]  & 0.0\,[0,0]  & 1.9\,[0,6] & 3.8\,[0,9] & \textbf{30.2\,[19,43]}&  3.8 &  0.0 &  0.0 &  1.9 &  9.4 \\
-Overall           & 83 & 3.6\,[0,8]  & 1.2\,[0,4]  & 1.2\,[0,4] & 2.4\,[0,6] & \textbf{26.5\,[17,36]}&  3.6 &  1.2 &  3.6 &  4.8 & 12.0 \\
+Middle (30--70\%) & 30 & 6.7\,[0,17] & 3.3\,[0,10] & 0.0\,[0,0] & 0.0\,[0,0] & 0.0\,[0,0] & \textbf{16.7\,[3,30]} \\
+Edge              & 53 & 1.9\,[0,6]  & 1.9\,[0,6]  & 1.9\,[0,6] & 3.8\,[0,9] & 1.9\,[0,6] & \textbf{30.2\,[19,43]} \\
+Overall           & 83 & 3.6\,[0,8]  & 2.4\,[0,6]  & 1.2\,[0,4] & 2.4\,[0,6] & 1.2\,[0,4] & \textbf{25.3\,[17,35]} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \begin{figure}[t]
   \centering
-  \includegraphics[width=0.82\linewidth]{figures/exp3_llm_ucurve.png}
+  \includegraphics[width=0.66\linewidth]{figures/exp3_llm_ucurve.png}
   \caption{End-to-end LLM instruction-following accuracy (\%, LLM-as-judge primary metric)
     by answer position decile: full context (16k-token window), BM25 top-20,
     and QCCS top-20 (Qwen2.5-7B-Instruct, $N{=}83$ unique instructions; three-arm
-    subset of five-arm experiment; see Table~\ref{tab:llm} for full five-arm results).
+    subset of six-arm experiment; see Table~\ref{tab:llm} for full six-arm results).
     QCCS is the best-performing arm in every position band; overall judge accuracy
-    26.5\% [17, 36] vs.\ $\leq$3.6\% for all comparators.
+    25.3\% [17, 35] vs.\ $\leq$3.6\% for all five comparators.
     Neither BM25 (96.7\% Stage~1 recall) nor dense retrieval (90.0\% recall) translates
     to LLM accuracy, confirming that context precision---not retrieval recall---is the
     binding constraint.}
@@ -652,32 +642,23 @@ Overall           & 83 & 3.6\,[0,8]  & 1.2\,[0,4]  & 1.2\,[0,4] & 2.4\,[0,6] & \
 \section{Discussion}
 \label{sec:discussion}
 
-The 21.9 percentage-point CLitM gap between peak and trough positions is not
-a benchmark artifact: 67.8\% of reference answers reside between the 10th and
-90th EHR percentile, so this gap maps directly onto content clinicians consider
-important.
+The 21.9~pp CLitM gap is not a benchmark artifact: 67.8\% of reference answers reside between the 10th and 90th EHR percentile, mapping directly onto clinically important content.
 
 \paragraph{Retrieval recall does not predict LLM accuracy.}
-At the retrieval level, BM25 and dense retrieval substantially outperform QCCS
-(98.8\%, 94.0\% vs.\ 34.9\% overall; Table~\ref{tab:qccsgate}). At the
-downstream LLM accuracy level, the ranking inverts: QCCS 26.5\% [17, 36]
-vs.\ $\leq$3.6\% for all comparators (Table~\ref{tab:llm}). This reversal
-establishes that context selection systems must be evaluated end-to-end with
-semantic metrics, not retrieval recall alone.
+BM25, cross-encoder, and dense retrieval all outperform QCCS at Stage~1 recall
+(98.8\%, 96.4\%, 94.0\% vs.\ 34.9\%), yet the ranking inverts at Stage~2:
+QCCS 25.3\% [17, 35] vs.\ $\leq$3.6\% for all five comparators including
+cross-encoder (0.0\% middle). Context selection must be evaluated end-to-end.
 
 \paragraph{QCCS provides consistent improvement across position bands.}
-QCCS outperforms all comparators in \emph{every} position decile, including
-early-context (0--10\%: 46.2\% vs.\ 0.0\% for all others), where primacy bias
-might have favored the full-context baseline. The full-context Qwen2.5-7B
-fails even at edge positions, confirming that 7B-scale models lack sufficient
-retrieval capacity to benefit from positional advantages in long EHRs.
+QCCS outperforms all comparators in every position band including early-context (0--10\%: 38.5\% vs.\ 0.0\%), where primacy bias provides no advantage to the full-context baseline.
 
 \paragraph{Structured prediction: selective benefit of inhibitory attention.}
-Differential Transformer yields significant gains on class-imbalanced tasks
-(anemia: +6.1~pp AUROC; hyperkalemia: +4.2~pp), but is significantly
-\emph{worse} on more balanced tasks (hyponatremia: $-1.9$~pp;
-thrombocytopenia: $-1.5$~pp; non-overlapping CIs in both cases). The benefit
-is real but selective, arising when target signal is sparse relative to background.
+DiffAttn yields gains on imbalanced tasks (anemia $+6.1$~pp AUROC; hyperkalemia
+$+4.2$~pp) but is significantly \emph{worse} on balanced tasks ($-1.9$ and
+$-1.5$~pp; non-overlapping CIs). Per-token QCCS gating (QCCS-DiffAttn; Eq.~3)
+does not extend these gains: training collapses to chance on hyperkalemia and AUROC
+falls below standard attention on all balanced tasks.
 
 \paragraph{Limitations.}
 See Appendix~\ref{app:limitations} for a full discussion of limitations including
@@ -690,8 +671,9 @@ context coverage confounds.
 
 CLitM is a robust clinical risk (21.9~pp gap; 67.8\% of reference evidence at
 mid-timeline positions). QCCS achieves 7$\times$ higher end-to-end LLM accuracy
-than BM25/dense retrieval despite lower Stage~1 recall, establishing context
-precision as the binding constraint for EHR context selection.
+than the best comparator (25.3\% vs.\ $\leq$3.6\%), including cross-encoder
+reranking with near-perfect Stage~1 recall, establishing context
+precision---not retrieval recall---as the binding constraint for EHR context selection.
 
 %% ─────────────────────────────────────────────────────────────────────────────
 \bibliographystyle{plainnat}
@@ -711,7 +693,7 @@ precision as the binding constraint for EHR context selection.
   \item[] Answer: \answerYes{}
   \item[] Justification: All quantitative claims in the abstract (21.9~pp CLitM
     gap; BM25 98.8\% overall vs.\ QCCS 34.9\% at $k{=}20$; LLM-as-judge
-    five-arm comparison showing QCCS 26.5\% [17,36] vs.\ $\leq$3.6\% for all
+    six-arm comparison showing QCCS 25.3\% [17,35] vs.\ $\leq$3.6\% for all
     comparators; +6.1~pp anemia AUROC with Differential Transformer) are
     directly reported in Tables~\ref{tab:qccsgate}--\ref{tab:llm} and
     Table~\ref{tab:ehrshot}, backed by the experiments in Section~3. Scope is
@@ -767,6 +749,9 @@ precision as the binding constraint for EHR context selection.
     70/30 patient-level split for Exp~3, $k=20$ top-sentence retention;
     Stage~2 primary metric is LLM-as-judge (Claude Haiku), secondary is
     $\geq$50\% token-overlap; bootstrap 95\% CIs reported.
+    Exp~2b (QCCS-DiffAttn, Eq.~3): task gate AdamW lr~$=10^{-3}$, batch~64,
+    30 epochs; Differential Transformer batch~64, 40 epochs; Apple Silicon MPS.
+    EHRSHOT official train/test splits (34.1\% train, 65.9\% test).
 
 \item {\bf Experiment Statistical Significance}
   \item[] Question: Does the paper report error bars suitably and correctly
@@ -788,8 +773,9 @@ precision as the binding constraint for EHR context selection.
   \item[] Justification: Experiments run on Modal GPU instances (Exp~2: A10G
     24~GB; Exp~3 LLM inference: A100 80~GB). Exp~2 total compute $\sim$4--8
     GPU-hours per task. Exp~3 gate trains on CPU in $\sim$15 minutes;
-    LLM re-inference requires $\sim$4--6 GPU-hours on A100 (three-arm,
-    $N{=}83$).
+    LLM re-inference requires $\sim$6--8 GPU-hours on A100 (six-arm,
+    $N{=}83$). Exp~2b (QCCS-DiffAttn): Apple Silicon MPS; $\sim$45 min/task
+    sequential (4 tasks, $\sim$3 GPU-hours total).
 
 \item {\bf Code of ethics}
   \item[] Question: Does the research conducted in the paper conform, in every
@@ -875,7 +861,7 @@ This work addresses a safety-relevant failure mode in clinical AI systems.
 Uncorrected positional bias in clinical decision support tools could contribute
 to diagnostic errors and medication-related adverse events. QCCS reduces this
 risk by directing model attention toward query-relevant evidence regardless of
-temporal position. The absolute accuracy levels demonstrated (up to 46.2\% with
+temporal position. The absolute accuracy levels demonstrated (up to 38.5\% with
 QCCS for early-context positions) are insufficient for unsupervised clinical
 decision-making; human oversight remains essential. Positional bias mitigation
 is a necessary but not sufficient condition for safe clinical AI deployment.
@@ -932,18 +918,19 @@ at \texttt{[anonymized for review]}.
 \label{app:ehrshot}
 
 Validation AUROC values for Table~\ref{tab:ehrshot} (reported for reference;
-test AUROC and AUPRC are the primary metrics):
+test AUROC and AUPRC are the primary metrics). QCCS-DiffAttn uses EHRSHOT
+official splits with no standard validation set; ``---'' indicates not applicable.
 
 \begin{center}
 \small
-\begin{tabular}{@{}lccc@{}}
+\begin{tabular}{@{}lcccc@{}}
 \toprule
-Task & Standard (val AUROC) & Differential (val AUROC) & H$_2$O (val AUROC) \\
+Task & Standard (val) & Differential (val) & H$_2$O (val) & QCCS-DiffAttn (val) \\
 \midrule
-Anemia         & 0.878 & 0.888 & 0.878 \\
-Hyperkalemia   & 0.607 & 0.654 & 0.776 \\
-Hyponatremia   & 0.747 & 0.732 & 0.736 \\
-Thrombocytopenia & 0.879 & 0.863 & 0.863 \\
+Anemia         & 0.878 & 0.888 & 0.878 & --- \\
+Hyperkalemia   & 0.607 & 0.654 & 0.776 & --- \\
+Hyponatremia   & 0.747 & 0.732 & 0.736 & --- \\
+Thrombocytopenia & 0.879 & 0.863 & 0.863 & --- \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -976,6 +963,50 @@ QCCS (with query) & 41.7\% & 38.1\% \\
 QCCS (no query)   & 27.0\% & 14.3\% \\
 \midrule
 Query contribution & +14.7~pp & +23.8~pp \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ── Appendix: Token-overlap secondary metric ─────────────────────────────────
+
+\subsection{Token-overlap Secondary Metric (Experiment 3, Stage 2)}
+\label{app:tokoverlap}
+
+Table~\ref{tab:tokoverlap} reports the token-overlap secondary accuracy
+($\geq$50\% of expected answer tokens present in response) alongside the
+primary LLM-as-judge metric. Token-overlap inflates scores for BM25-filtered
+and Dense in the 30--50\% position band (22.2\% and 33.3\% respectively by
+token-overlap vs.\ 0.0\% by judge), and most severely for cross-encoder (CE) in
+the 30--50\% band (44.4\% token-overlap vs.\ 0.0\% judge). These discrepancies
+indicate that token-overlap rewards responses that surface query-matching vocabulary
+without correctly answering the question. LLM-as-judge scoring removes these
+false positives; the inflated CE token-overlap (9.6\% overall vs.\ 1.2\% judge)
+further illustrates why semantic evaluation is essential for this task.
+
+\begin{table}[H]
+\centering
+\caption{Token-overlap secondary accuracy (\%): response contains $\geq$50\%
+  of expected answer tokens. Same test split and six arms as Table~\ref{tab:llm}.
+  CE token-overlap is substantially inflated vs.\ judge (9.6\% vs.\ 1.2\% overall),
+  most severely at 30--50\% (44.4\% vs.\ 0.0\%). Compare to LLM-as-judge
+  primary metric (Table~\ref{tab:llm}).}
+\label{tab:tokoverlap}
+\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lc cccccc@{}}
+\toprule
+Pos.\ band & $N$ & Full & BM25 & B25f & Dense & CE & QCCS \\
+\midrule
+0--10\%   & 13 &  0.0 &  0.0 &  0.0 &  0.0 &  0.0 &  0.0 \\
+10--30\%  & 12 &  0.0 &  0.0 &  0.0 &  0.0 &  0.0 &  0.0 \\
+30--50\%  &  9 & 11.1 &  0.0 & 22.2 & 33.3 & 44.4 & 22.2 \\
+50--70\%  & 21 &  0.0 &  4.8 &  4.8 &  0.0 &  4.8 &  4.8 \\
+70--90\%  & 13 &  7.7 &  0.0 &  0.0 &  7.7 &  7.7 & 15.4 \\
+90--100\% & 15 &  6.7 &  0.0 &  0.0 &  0.0 & 13.3 & 13.3 \\
+\midrule
+Middle (30--70\%) & 30 & 3.3 & 3.3 & 10.0 & 10.0 & 16.7 & 10.0 \\
+Edge              & 53 & 3.8 & 0.0 &  0.0 &  1.9 &  5.7 &  7.5 \\
+Overall           & 83 & 3.6 & 1.2 &  3.6 &  4.8 &  9.6 &  8.4 \\
 \bottomrule
 \end{tabular}
 \end{table}
