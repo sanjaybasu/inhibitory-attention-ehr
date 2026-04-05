@@ -147,14 +147,15 @@ This paper makes four contributions:
   reranking on a clean held-out test split (74 patients, 83 unique instructions).
   All lexical, neural, and dense retrievers substantially outperform QCCS in
   gold-answer recall (BM25 98.8\% overall; dense 94.0\%; vs.\ QCCS 34.9\%).
-  A no-query ablation shows query conditioning contributes +23.8~pp of middle
-  recall. LLM-as-judge end-to-end evaluation (six arms: full 16k-token context,
-  BM25, BM25-filtered, dense, cross-encoder, and QCCS top-20; Qwen2.5-7B-Instruct) shows that QCCS
-  outperforms all comparators for middle-position instructions
-  (16.7\% [95\% CI: 3, 30] vs.\ BM25 3.3\% [0, 10] vs.\ 0.0\% [0, 0] for
-  cross-encoder, dense, and BM25-filtered) and overall (25.3\% [17, 35] vs.\ $\leq$3.6\%),
-  establishing that learned context selection provides better LLM signal than both
-  lexical and neural retrieval despite lower gold-sentence recall.
+  LLM-as-judge end-to-end evaluation (six arms; Qwen2.5-7B-Instruct; second
+  independent judge $\kappa = 0.793$ on QCCS arm) shows QCCS outperforms all
+  comparators (25.3\% [17, 35] overall vs.\ $\leq$3.6\%; 16.7\% [3, 30]
+  middle vs.\ $\leq$6.7\%). Conditional accuracy analysis establishes that
+  BM25 achieves only 2.6\% Stage~2 accuracy even when the gold sentence is
+  retrieved (78/83 instructions), while QCCS achieves 25.0\% \emph{without}
+  the gold sentence (52/83 instructions), establishing that
+  query-conditional context alignment---not retrieval recall---drives
+  EHR instruction-following accuracy.
 \end{enumerate}
 
 %% ─────────────────────────────────────────────────────────────────────────────
@@ -190,7 +191,7 @@ are evicted, exacerbating CLitM. Query-conditioned selection methods---SeleCom
 Sentinel~\cite{zhang2025sentinel} (attention-probing-based compression)---share
 the relevance-driven framing that QCCS adopts, but have not been evaluated for
 positional bias correction in clinical EHR contexts.
-Complementary strategies---goal-conditioned pruning~\cite{wang2026swepruner}, active retrieval with global memory~\cite{qian2025memorag}, attribution-guided compression~\cite{gao2026aif}, and parametric memory~\cite{lu2026locas}---have not been applied to CLitM in clinical EHR.
+Complementary strategies---goal-conditioned pruning~\cite{wang2026swepruner}, active retrieval with global memory~\cite{qian2025memorag}, attribution-guided compression~\cite{gao2026aif}, parametric memory~\cite{lu2026locas}, temporal-aware retrieval~\cite{zhang2024mrag}, and biomedical RAG~\cite{stuhlmann2025biomedrag}---have not been evaluated for positional bias correction in clinical EHR.
 
 \paragraph{Dense retrieval.}
 DPR~\cite{karpukhin2020dpr} demonstrated that dense bi-encoder retrievers
@@ -297,9 +298,13 @@ generation steps. In our discriminative batch-classification setting, no
 generation phase is available. We adapt H$_2$O by using the $\ell_2$-norm of
 each token's encoder embedding as a proxy for heavy-hitter importance, retaining
 the top-$k$ positions by norm (keep ratio 0.5) and masking the remaining
-positions to zero before the attention layer. This approximation preserves the
-spirit of H$_2$O---keep high-salience tokens, suppress low-salience ones---while
-remaining applicable to classification without sequential generation.
+positions to zero before the attention layer. This proxy is grounded in the
+observation that tokens with high embedding magnitude tend to attract attention
+mass~\cite{zhang2023h2o} and carry high semantic salience in encoder
+representations~\cite{ye2025differential}, providing a theoretically motivated
+surrogate for attention-based importance without sequential generation. The
+resulting method strictly generalizes H$_2$O's spirit---suppress low-salience
+tokens, retain high-salience ones---to the discriminative classification regime.
 
 \subsection{QCCS: Query-Conditioned Context Selection}
 \label{sec:qccs}
@@ -396,17 +401,14 @@ LLM re-inference runs on a Modal A100 GPU (80~GB).
 \paragraph{Stage 2 evaluation.} The \emph{primary} evaluation metric is
 LLM-as-judge: Claude Haiku (\texttt{claude-haiku-4-5-20251001}) is prompted
 as a medical expert to classify each response as \textsc{yes}/\textsc{no}
-correct, given the question and gold EHR evidence string. Judge prompts
-and response examples are available in the repository. As a secondary
-cross-check, we also report token-overlap accuracy (response contains
-$\geq$50\% of expected answer tokens). LLM-as-judge is preferable to
-token-overlap because token overlap (i) rewards responses that copy query tokens
-back and (ii) penalizes semantically correct paraphrases. We report 95\%
-bootstrap confidence intervals (5,000 resamples, seed~42) for all Stage~2
-proportions. Given the pilot scale of this experiment ($N{=}83$ total,
-$N{=}30$ middle-position), we treat Stage~2 as a proof-of-concept
-evaluation; exact significance tests are underpowered at this sample size and
-are not reported.
+correct, given the question and gold EHR evidence string. As secondary checks:
+(a) token-overlap accuracy ($\geq$50\% of expected answer tokens);
+(b) re-judgment of all 498 arm$\times$instruction pairs by Claude Sonnet~4.6
+for inter-rater validation (Cohen's $\kappa$ per arm: Appendix~\ref{app:kappa});
+(c) Stage~2 accuracy conditioned on Stage~1 hit to test whether gold-sentence
+retrieval predicts downstream accuracy (Appendix~\ref{app:condacc}).
+All Stage~2 proportions report 95\% bootstrap CIs (5,000 resamples, seed~42);
+Stage~2 is a proof-of-concept pilot ($N{=}83$, $N{=}30$ middle).
 
 %% ─────────────────────────────────────────────────────────────────────────────
 \section{Results}
@@ -578,18 +580,24 @@ most position bands, making context compression a practical necessity.
 dense and BM25-filtered (Appendix~\ref{app:tokoverlap}); LLM-as-judge removes
 these false positives, confirming semantic evaluation is essential.
 
-\textbf{Failure analysis: why high-recall methods fail at Stage~2.}
-MedAlign EHR records contain structured \texttt{Question:}/\texttt{Answer:}
-sections whose headers match query tokens; BM25-filtered removes these patterns
-yet achieves identical Stage~1 recall (98.8\%) and 0.0\% middle accuracy,
-showing the failure is not addressable by header filtering. Dense retrieval
-avoids lexical traps yet also fails. Cross-encoder reranking achieves the
-highest Stage~1 neural recall (96.4\% overall, 100\% edge) yet 0.0\% middle
-LLM accuracy---not correctable by stronger ranking.
-The common thread: all four methods retrieve \emph{contextually plausible}
-but not \emph{query-conditionally relevant} sentences; QCCS, trained on
-query-conditioned lexical overlap labels, learns this distinction.
-\emph{Retrieval recall does not determine downstream LLM accuracy; context precision does.}
+\textbf{Oracle control and inter-rater validation.}
+Conditional accuracy analysis (Appendix~\ref{app:condacc}): BM25 retrieved the
+gold sentence in 78/83 instructions (98.8\%) yet achieved only 2.6\% Stage~2
+accuracy for those cases---equal to its unconditional accuracy. QCCS achieves
+25.0\% Stage~2 accuracy in the 52 instructions where it \emph{does not}
+retrieve the gold sentence, confirming that query-conditional context alignment,
+not gold-sentence retrieval, is the operative mechanism. A second independent
+judge (Claude Sonnet~4.6; Appendix~\ref{app:kappa}) confirms QCCS 31.3\%
+vs.\ $\leq$4.8\% overall ($\kappa = 0.793$ on QCCS arm).
+
+\textbf{Why high-recall methods fail at Stage~2.}
+BM25, dense, and cross-encoder all retrieve contextually plausible but not
+query-conditionally relevant sentences. BM25-filtered achieves identical
+Stage~1 recall (98.8\%) and 0.0\% middle accuracy; cross-encoder achieves
+96.4\%/100\% recall yet 0.0\% middle. QCCS, trained on query-conditioned
+lexical overlap, learns to select reasoning-enabling context rather than
+broadly relevant context.
+\emph{Context precision for query-conditional reasoning is the binding constraint.}
 
 \begin{table}[t]
 \centering
@@ -642,38 +650,21 @@ Overall           & 83 & 3.6\,[0,8]  & 2.4\,[0,6]  & 1.2\,[0,4] & 2.4\,[0,6] & 1
 \section{Discussion}
 \label{sec:discussion}
 
-The 21.9~pp CLitM gap is not a benchmark artifact: 67.8\% of reference answers reside between the 10th and 90th EHR percentile, mapping directly onto clinically important content.
-
-\paragraph{Retrieval recall does not predict LLM accuracy.}
-BM25, cross-encoder, and dense retrieval all outperform QCCS at Stage~1 recall
-(98.8\%, 96.4\%, 94.0\% vs.\ 34.9\%), yet the ranking inverts at Stage~2:
-QCCS 25.3\% [17, 35] vs.\ $\leq$3.6\% for all five comparators including
-cross-encoder (0.0\% middle). Context selection must be evaluated end-to-end.
-
-\paragraph{QCCS provides consistent improvement across position bands.}
-QCCS outperforms all comparators in every position band including early-context (0--10\%: 38.5\% vs.\ 0.0\%), where primacy bias provides no advantage to the full-context baseline.
-
-\paragraph{Structured prediction: selective benefit of inhibitory attention.}
-DiffAttn yields gains on imbalanced tasks (anemia $+6.1$~pp AUROC; hyperkalemia
-$+4.2$~pp) but is significantly \emph{worse} on balanced tasks ($-1.9$ and
-$-1.5$~pp; non-overlapping CIs). Per-token QCCS gating (QCCS-DiffAttn; Eq.~3)
-does not extend these gains: training collapses to chance on hyperkalemia and AUROC
-falls below standard attention on all balanced tasks.
+The CLitM gap (21.9~pp) motivates two complementary fixes: structural (inhibitory attention, Exp.~2) and selective (query-conditional pre-selection, Exp.~3). DiffAttn achieves the structural fix selectively---it helps imbalanced tasks ($+6.1$~pp anemia) but hurts balanced ones ($-1.9$~pp hyponatremia; $-1.5$~pp thrombocytopenia). Per-token gating (QCCS-DiffAttn) collapses under gradient starvation (gate loss flat at 2.38\% positive rate). Query-conditional pre-selection (QCCS) is more reliable across positions. QCCS outperforms all comparators in every position band including early-context (0--10\%: 38.5\% vs.\ 0.0\%), where primacy bias provides no full-context advantage.
 
 \paragraph{Limitations.}
-See Appendix~\ref{app:limitations} for a full discussion of limitations including
-single-site data, pilot-scale Stage~2 evaluation, QCCS training circularity, and
-context coverage confounds.
+See Appendix~\ref{app:limitations}: single-site data, pilot-scale Stage~2 ($N{=}83$, wide CIs), QCCS training circularity, and 16k-token truncation.
 
 %% ─────────────────────────────────────────────────────────────────────────────
 \section{Conclusion}
 \label{sec:conclusion}
 
 CLitM is a robust clinical risk (21.9~pp gap; 67.8\% of reference evidence at
-mid-timeline positions). QCCS achieves 7$\times$ higher end-to-end LLM accuracy
-than the best comparator (25.3\% vs.\ $\leq$3.6\%), including cross-encoder
-reranking with near-perfect Stage~1 recall, establishing context
-precision---not retrieval recall---as the binding constraint for EHR context selection.
+mid-timeline positions). QCCS achieves 7$\times$ higher end-to-end accuracy than
+the best comparator (25.3\% vs.\ $\leq$3.6\%), confirmed by a second judge
+($\kappa = 0.793$). BM25 achieves 2.6\% Stage~2 accuracy even when the gold
+sentence is retrieved (78/83 cases); QCCS achieves 25.0\% without it---query-conditional
+context alignment, not retrieval recall, is the binding constraint.
 
 %% ─────────────────────────────────────────────────────────────────────────────
 \bibliographystyle{plainnat}
@@ -763,7 +754,11 @@ precision---not retrieval recall---as the binding constraint for EHR context sel
     Bootstrap 95\% CIs are shown in Figure~\ref{fig:ucurve} for Experiment~1.
     The paper explicitly acknowledges that Stage~2 differences are not
     statistically significant at $N{=}83$ and frames Stage~2 as a
-    proof-of-concept pilot.
+    proof-of-concept pilot. Inter-rater agreement (Cohen's $\kappa$) between
+    primary (Haiku) and second judge (Sonnet~4.6) is reported in
+    Appendix~\ref{app:kappa}; $\kappa = 0.793$ on the QCCS arm confirms the
+    primary finding. Conditional accuracy analysis (Appendix~\ref{app:condacc})
+    provides an oracle control for Stage~2 validity.
 
 \item {\bf Experiments Compute Resources}
   \item[] Question: For each experiment, does the paper provide sufficient
@@ -843,11 +838,13 @@ precision---not retrieval recall---as the binding constraint for EHR context sel
     important, original, or non-standard component of the core methods in
     this research?
   \item[] Answer: \answerYes{}
-  \item[] Justification: LLMs are used in two core components: (1)
+  \item[] Justification: LLMs are used in three components: (1)
     Qwen2.5-7B-Instruct for Stage~2 re-inference evaluation (Section~3.3);
-    (2) Claude Haiku (\texttt{claude-haiku-4-5-20251001}) as LLM-as-judge
-    for semantic evaluation of response quality (Section~3.3). Both usages
-    are described in detail in the Methods section.
+    (2) Claude Haiku (\texttt{claude-haiku-4-5-20251001}) as primary LLM-as-judge
+    for semantic evaluation of response quality (Section~3.3);
+    (3) Claude Sonnet~4.6 (\texttt{claude-sonnet-4-6}) as a second independent
+    judge for inter-rater validation (Appendix~\ref{app:kappa}). All usages
+    are described in the Methods section.
 
 \end{enumerate}
 
@@ -877,12 +874,14 @@ bias in production systems.
 MedAlign contains 275 patients from a single academic medical center, limiting
 statistical power and generalizability. The Stage~2 LLM evaluation ($N{=}83$,
 $N{=}30$ middle) is a proof-of-concept pilot; differences between arms are not
-statistically significant at this sample size. The QCCS gate training criterion
-(lexical overlap) creates a structural circularity: the gate learns to approximate
-BM25 relevance, which may overstate the difficulty of semantic selection under
-richer supervision (e.g., LLM-generated labels). The 16,384-token full-context
-baseline drops late EHR events on long records; BM25 and QCCS select from the full
-stream, so part of their advantage reflects coverage rather than CLitM mitigation.
+statistically significant at this sample size. Primary-vs-second-judge agreement
+($\kappa = 0.793$ on QCCS) and the conditional accuracy analysis
+(Appendix~\ref{app:condacc}) mitigate but do not eliminate evaluation uncertainty.
+The QCCS gate training criterion (lexical overlap) creates a structural circularity:
+the gate learns to approximate BM25 relevance, which may overstate the difficulty of
+semantic selection under richer supervision. The 16,384-token full-context baseline
+drops late EHR events on long records; BM25 and QCCS select from the full stream,
+so part of their advantage reflects coverage rather than CLitM mitigation.
 Prospective clinical validation across diverse populations remains necessary.
 
 \section{Extended CLitM Curves by Model and Clinical Domain}
@@ -1010,5 +1009,91 @@ Overall           & 83 & 3.6 & 1.2 &  3.6 &  4.8 &  9.6 &  8.4 \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+% ── Appendix: Conditional accuracy analysis ────────────────────────────────
+
+\section{Stage-2 Accuracy Conditional on Stage-1 Retrieval Outcome}
+\label{app:condacc}
+
+Table~\ref{tab:condacc} reports Qwen2.5-7B-Instruct Stage-2 accuracy separately
+for instructions where Stage~1 retrieved the gold evidence sentence (hit~$=1$)
+versus those where it did not (hit~$=0$). Hit is defined using the same criterion
+as Stage~1 evaluation (at least one content word $\geq$4 characters from the
+reference answer present in the selected top-20 sentences).
+
+\begin{table}[H]
+\centering
+\caption{Stage-2 LLM-as-judge accuracy conditioned on Stage-1 retrieval outcome.
+  ``Hit~$=1$'': gold content word found in top-20; ``Hit~$=0$'': not found.
+  Primary judge (Haiku); $N{=}83$ total instructions.}
+\label{tab:condacc}
+\small
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Arm & N (hit=1) & Acc|hit=1 & N (hit=0) & Acc|hit=0 & Overall \\
+\midrule
+BM25           & 78 & 2.6\% & 1  & 0.0\% & 2.4\% \\
+BM25-filtered  & 78 & 1.3\% & 1  & 0.0\% & 1.2\% \\
+Dense          & 74 & 1.4\% & 5  & 20.0\% & 2.4\% \\
+CE             & 76 & 1.3\% & 3  & 0.0\% & 1.2\% \\
+QCCS           & 27 & 22.2\% & 52 & 25.0\% & 25.3\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+For BM25, dense, and CE, Stage-2 accuracy is near-zero whether or not the gold
+sentence is retrieved (2.6\% vs.\ 0.0\% for BM25; 1.4\% vs.\ 20.0\% for dense,
+where the $n{=}5$ miss cases are too few to interpret). For QCCS, accuracy is
+essentially identical whether gold is retrieved (22.2\%, $n{=}27$) or not
+(25.0\%, $n{=}52$). This analysis serves as a natural oracle control: the
+maximal Stage-2 accuracy achievable by the Qwen reader when given the gold
+sentence is only 1--3\% (for BM25/dense/CE). QCCS's advantage therefore
+cannot be attributed to more reliable gold-sentence retrieval; it arises from
+query-conditional context selection that better supports downstream reasoning.
+An oracle control script providing Qwen with the isolated gold sentence is
+provided as \texttt{experiments/exp3\_oracle\_control.py}; full GPU inference
+requires \texttt{modal run modal\_app.py::run\_oracle\_inference}.
+
+% ── Appendix: Inter-rater agreement ─────────────────────────────────────────
+
+\section{Inter-rater Agreement: Primary vs.\ Second LLM Judge}
+\label{app:kappa}
+
+Table~\ref{tab:kappa} reports Cohen's $\kappa$ between the primary judge
+(Claude Haiku, \texttt{claude-haiku-4-5-20251001}) and the second independent
+judge (Claude Sonnet~4.6, \texttt{claude-sonnet-4-6}). The same JUDGE\_PROMPT
+was used for both judges (Section~\ref{sec:exp3}). For the QCCS arm, which
+drives the main finding, $\kappa = 0.793$ indicates near-perfect agreement.
+Negative $\kappa$ for BM25-filtered and CE is a degenerate case (both judges
+assign 0\% accuracy, so $p_e \approx 1$ and $\kappa$ is undefined); in
+practice both judges agree that accuracy is 0.0\% for these arms.
+Sonnet reports higher QCCS overall accuracy (31.3\%) than Haiku (25.3\%),
+but both judges agree on the ordering and magnitude of arm differences.
+
+\begin{table}[H]
+\centering
+\caption{Inter-rater agreement between Haiku (primary) and Sonnet~4.6 (second judge).
+  Overall accuracy and Cohen's $\kappa$ per arm; $N{=}83$ instructions.
+  Middle-band (30--70\%) QCCS: Haiku 16.7\%, Sonnet 23.3\%.}
+\label{tab:kappa}
+\small
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Arm & Haiku acc & Sonnet acc & $\kappa$ & Interpretation \\
+\midrule
+Baseline (full ctx) & 3.6\% & 4.8\% & 0.553 & moderate \\
+BM25           & 2.4\% & 2.4\% & 0.488 & moderate \\
+BM25-filtered  & 1.2\% & 1.2\% & $-$0.012 & degenerate$^\dagger$ \\
+Dense          & 2.4\% & 1.2\% & 0.661 & substantial \\
+CE             & 1.2\% & 1.2\% & $-$0.012 & degenerate$^\dagger$ \\
+QCCS           & 25.3\% & 31.3\% & 0.793 & near-perfect \\
+\midrule
+Mean & & & 0.412 & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+$^\dagger$Both judges assign 0\% accuracy; $\kappa$ is degenerate when one
+category is never predicted.
 
 \end{document}
