@@ -1,0 +1,90 @@
+filename,question,evidence,bm25_sem,bm25_filtered_sem,dense_sem,ce_sem,qccs_sem,bm25_lex,bm25_filtered_lex,dense_lex,ce_lex,qccs_lex
+126391686.xml,Please show the patient's vital signs over the past 6 months,Vitals  Temp 36.7 C (98 F)  | Wt 10.4 kg (22 lb 14.5 oz)|||Vitals  Temp (!) 36.2 C (97.1 F)  | Wt 10,1,1,1,0,0,1,1,1,1,0
+127022669.xml,Does this patient take chronic steroids?,Medications: x 80 mg lasix per day - dose was increased from 40 mg,0,0,0,0,0,1,1,1,1,0
+126326545.xml,Does this patient have any first degree relatives with early cardiovasulcar deat,"FAMILY HISTORY:  Her mother has no history of diabetes, cardiovascular disease, or hypertension, but",0,0,0,0,0,1,1,1,1,1
+127790341.xml,Are there any firearms at home?,No firearms in the home,0,0,0,0,0,1,1,0,1,0
+124983950.xml,Provide contact information of this patient's care team.,"Dominican Hospital (Dignity Health) 661 42nd St, Rockford IL (999-999-9999",1,1,1,1,0,1,1,1,1,0
+127159023.xml,Does this radiology report contain critical results that need to be communicated,"<note type=""procedure note"" start=""01/17/2023 08:17"">EXAM: MR BREAST W AND WO IV CONTRAST BILATERAL ",1,1,0,0,0,1,1,1,1,1
+126061094.xml,Does this patient have claustrophobia?,"""Please let staff know if you have any of the following:
+? Significant pain, anxiety or claustrophob",0,0,0,0,0,1,1,1,1,1
+125332989.xml,Provide a detailed obstetrical history for this patient.,"She is G-III, P-I, 0, 2, 1. She has a son. Her age at first term pregnancy is 35.",0,0,0,0,0,1,1,1,1,0
+125135676.xml,This patient has a newly detected small lung nodule (2 mm) in his left upper lob,"CLINICAL HISTORY: 70 years of age, Female, lung nodule (7mm)",0,0,0,0,1,1,1,1,1,0
+126289805.xml,Does she smoke?,Tobacco smoking status Never,1,1,1,0,0,1,1,1,1,0
+128506257.xml,"Does this patient often ""No Show"" for scheduled appointments?","Patient has ""No Show"" to UDS appointmenter with Dr Rosario x 2 on 02/12/2022 and 05/14/2022",1,1,1,1,1,1,1,1,1,0
+125066519.xml,Has the patient ever had a venous thrombotic event?,No prior personal history of VTE,1,1,1,1,1,1,1,1,1,0
+127228947.xml,What details are missing from this clinical history that may be important in dev,"Demography:  Age: 75 Y  Sex: male
+[] Hispanic  [x] Not Hispanic or Latino  [] Not Reported  [] Unkno",0,0,0,0,0,1,1,1,1,1
+125598950.xml,Were any adverse reactions to local anesthetics reported in this patient in the ,"However, she is allergic to local anesthetics",1,1,1,0,0,1,1,1,1,1
+125332989.xml,List past medical history based on all prior clinical notes.,HISTORY OF THE PRESENT ILLNESS: Mrs. Zapata has been followed by yearly  mammograms. On a recent mam,0,0,0,0,0,1,1,1,1,1
+126630417.xml,Whata are the patients most significant social determinants of health that need ,"He described strong social support from his supportive wife (married 59 years), good relationships w",0,0,0,0,0,1,1,1,1,0
+125232065.xml,Which diuretics has this patient tried,"on lasix and spironolactone for diuresis|||edema, which is now well managed on diuretic therapy. ari",0,0,0,0,0,1,1,1,1,0
+124609382.xml,Is the patient involved in selling guns or other firearms out of his home?,denies  access to guns,0,0,0,0,0,1,1,1,0,0
+125477011.xml,What days of the week does he get dialysis?,dialysis MWF,1,0,1,0,0,1,1,1,1,0
+126288775.xml,Has there been issues with non-compliance,"""Pt stated that he has made attempts to follow up with outpatient MH, but doesn't go to appts if he ",0,0,0,0,0,1,1,1,1,1
+125775163.xml,What is the patient's vaccination history for COVID,COVID-19 Vaccine (3 - Booster for Slepian series) 05/29/2022,1,1,1,1,0,1,1,1,1,0
+124819611.xml,"How often has this patient ""No Showed"" for appointments in the past five years?","""Pt had a new pt appt back in Jan.but he was a no show.""",0,0,0,0,0,1,1,1,0,0
+126170351.xml,How many fetal ultrasound examination did we perform in 2021 in our institution?,"<code>[CPT4/76805] Ultrasound, pregnant uterus, real time with image",0,0,0,0,0,1,1,1,1,0
+126738871.xml,How much does she drink usually?,Comment: 2 drinks per month,0,0,0,0,0,1,1,0,1,0
+125014561.xml,What barriers to discharge for patients on my team can I address today?,"Barriers to discharge plan: Lack of family support, Patient hesitance",1,1,0,0,0,1,1,1,1,0
+127952117.xml,"What the patients body weight over the past five years, include all recorded cha",<code>[LOINC/29463-7] Body weight 104.23 ounces</code>,0,0,1,0,0,1,1,1,1,0
+127897783.xml,Has the patient experienced any adverse reactions to antibiotics?,<code>[ICD/T36.0X5A] Penicillin adverse reaction</code>,1,1,1,1,0,1,1,1,1,0
+125051295.xml,"How much does the patient drink, low long has he/she been sober, when/if the pat",New patient visit  Video visit to discuss alcoholism  History of alcohol abuse for many years  Was p,1,1,1,0,0,1,1,1,1,0
+126007728.xml,Is the patient compliant in taking medications,"Regarding medications, she is compliant with her Tecfidera therapy. She still has occasional flushin",0,0,0,0,0,1,1,1,1,0
+128507005.xml,Summarize the patients ED/ urgent care visits over the past 5 years,"<note type=""emergency department note"" start=""12/02/2015 23:53"">Triage: had concerns including Aller",0,0,0,0,0,1,1,1,1,1
+128226755.xml,Summarize the most recent annual physical with the PCP,Physical Exam  Vital Signs in the last 24 hours:  Temp  Avg: 37.6 C (99.7 F)  Min: 36.7 C (98.1 F)  ,1,1,0,1,0,1,1,1,1,0
+126529055.xml,Summarize all inflammation/ rheumatological lab tests the patient has had in a t,patient was referred to rheumatology for further lab workup.,0,0,1,1,0,1,1,1,1,1
+125527716.xml,Show me the drinking history of this patient,Also continues to have 2-3 drinks of wine only for many years.,0,1,0,1,0,1,1,1,1,0
+127310221.xml,"Based on the information I've included under HPI, what is a reasonable different",HPI: Vanesa Najjar is a 29 Y female patient here for strong family history of malignancy including m,1,1,0,0,0,1,1,1,1,0
+124938510.xml,"Create patient instructions that summarize all the patient's medications, includ",atorvastatin (Lipitor) 40 mg tablet take 1 Tablet (40 mg total) by mouth daily 90,0,1,0,1,0,1,1,1,1,1
+127858887.xml,Create patient instructions for supportive care for an upper respiratory tract i,"""1. Sore throat  POCT Rapid Strep A
+2. URI (upper respiratory infection)""",0,0,0,0,0,1,1,1,1,1
+127680685.xml,Who was the referring provider and what is the consult question?,"<note type=""note"" start=""11/24/2022 13:40"">Referrals needed?: Yes, pended Gyn and GI
+Health Maintena",0,0,1,1,0,1,1,1,1,1
+128074264.xml,"Summarize all infectious laboratory work up the patient has had in a table, incl",<code>[SNOMED/122325001] Cytomegalovirus DNA assay Not Detected</code>|||     <code>[LOINC/736-9] Ly,1,1,1,1,1,1,1,1,1,0
+125513857.xml,Did he ever have a blood pressure above 160 this admission?,Systolic blood pressure 134,0,0,0,0,0,1,1,1,1,0
+127171480.xml,Does the patient typically sleep a lot during the day?,"Sleep: Interrupted by pain,",1,1,1,0,0,1,1,1,1,1
+125615374.xml,Did the patient need assistance when walking with physical therapy?,Gait Level of Assist : Moderate,0,1,1,1,0,1,1,1,1,0
+127092346.xml,"Summarize the list of specialists that this patient has seen in the last year, i","""She saw a geneticist and MicroArray was negative for her.  Genetic testing for both parents were ne",0,0,0,0,0,1,1,1,1,1
+126705564.xml,What antihypertensives does she take?,lisinopril;,0,0,1,0,0,1,1,1,1,0
+126289805.xml,Does she do any drugs?,Denies history of other substance use within the last 12 months,1,1,1,1,0,1,1,1,1,1
+125619898.xml,Has this person seen neurology before?,Stanford Children's Hospital Neurology Clinic at CPMC last visit in Neurology was on 11/01/2020.,0,0,0,0,0,1,1,1,1,1
+125298501.xml,How long has she had a hemoglobin a1c over 6?,Hemoglobin A1c/Hemoglobin.total in Blood 6.50 %,1,1,0,1,0,1,1,1,1,1
+125802130.xml,Has she had a history of depression?,"She denies any symptoms consistent with mania, hypomania or depression.",1,1,0,0,0,1,1,1,1,1
+126358217.xml,Who is the resident doctor who last saw this patient?,Medical Student/Resident/Fellow: Fisk,0,0,1,1,0,1,1,1,1,0
+124691610.xml,Which MR contrast agents were used in this patient in the past?,"""PROCEDURE COMMENTS: MRI of the cervical spine was performed before  and after administration of 13 ",1,1,1,1,0,1,1,1,1,1
+125718675.xml,List all previous MR examinations in this patient that depicted the liver.,<code>[LOINC/24587-8] MR Brain WO and W contrast IV,1,0,0,0,0,1,1,1,1,1
+125191041.xml,Was a decline in kidney function observed after iodinated contrast agent adminis,"""Multidetector CT of the abdomen and pelvis was performed following intravenous administration of io",1,1,1,1,0,1,1,1,1,1
+126412809.xml,This report contains measurements of target lesions in this patient with lung ca,"Lungs: Mildly hyperaerated. Nodular densities are seen bilaterally,",1,1,1,1,1,1,1,0,1,0
+126724211.xml,We were not able to perform the scheduled MRI exam in this patient due to claust,"""Thus, MRI was obtained urgently, though Pt tolerated only diffusion and very poor initial vessel im",0,0,0,0,0,1,1,1,1,0
+126999848.xml,Was antibiotic treatment initiated in this patient within the past month?,nitrofurantoin (Macrodantin) 50 mg capsule 30 Capsule,1,1,1,0,1,1,1,1,1,1
+127882600.xml,What are this patient's current clinical symptoms?,33 yo G2P0020 who presents for: 1. Unexplained,0,0,0,0,0,1,1,1,1,0
+128126942.xml,This is a complex whole body PET/MR report. Provide a version of this report tha,"procedure note"" start=""01/33/2018 03:02 PM"">PET MRI",1,1,1,1,1,1,1,1,1,1
+128163935.xml,Does this patient receive treatment for hyperthyroidism?,"""Does the patient have a history of Hypothyroidism?""",1,1,1,1,0,1,1,1,1,1
+124978474.xml,I have seen an abdominal CT exam if a female patient with diverticulitis today. ,Most recent CT scan shows stool,0,0,0,0,0,1,1,1,1,0
+124915919.xml,What is due for patient's health maintenance,"<note type=""note type"" start=""07/24/2021 12:20"">Called for population health outreach to inform pati",1,1,1,1,0,1,1,1,1,1
+128275759.xml,"has this patient ever had a colonoscopy? if so, when was it and what were the fi","""The colonoscopy was performed with
+ease. The patient tolerated the procedure well. The quality of t",0,0,0,0,0,1,1,1,1,0
+127203907.xml,"Summarize the patient's fluid intake and output measurements, including intraven",Previous 0600 - 0559Since 0600Intake1825.9 mL53.9 mL/kg/24hrs180 mL5.3 mL/kg/10hrs220 mL Infusions18,1,1,1,1,1,1,1,1,1,0
+127159232.xml,This is the report of the last oncologic PET/MR examination. Please list items t,She had a negative PET scan in 09/23/2019 and anoscopy with surgery team,0,0,1,0,0,1,1,1,1,0
+126999848.xml,What are this patient's age and weight?,Weight: 120.6 kg (265 lb 12.8 oz) ||| Age in Years: 39,0,0,0,0,0,1,1,0,1,0
+126110968.xml,Is the patient ordered to have nothing after midnight?,experimenting with a low FODMAPs diet.,0,0,0,0,0,1,1,1,1,1
+124602840.xml,Who is the patient's medical decision maker?,"Summary response to observation:  Lichin Theberge  87 year old female with PMHx of dementia, neuropa",1,1,0,1,0,1,1,1,1,0
+126775072.xml,This is a screening mammography. Breast density on both sides category A. BIRADS,"<code>[CPT4/77067] Screening mammography, bilateral (2-view study of each breast), including compute",0,0,1,1,0,1,1,1,1,0
+126630417.xml,Please compile the patient's current social determinants of health risks from no,"Background: Pro suffered a workplace back injury and suffers from chronic back pain, he reports that",0,1,0,1,0,1,1,1,1,0
+127297833.xml,summarize the anti-lipemic medications this patient has tried,"Hypertension, benign  Mixed hyperlipidemia  Doing well off his meds, he can't tolerate statins and d",0,0,0,0,0,1,1,1,1,0
+127567043.xml,Please summarize this patient's last abdominal CT report.,CT of the abdomen and pelvis was performed without IV or oral,1,1,1,1,1,1,1,1,1,0
+126394715.xml,Does this radiology report contain a new diagnosis of cancer?,"<note type=""procedure note"" start=""02/06/2023 06:54 AM"">FULL RESULT: Examination: MRI ABDOMEN &amp; ",1,1,0,0,0,1,1,1,1,1
+126637006.xml,Should prostate cancer screening be considered for this patient?,"""Has family hx of prostate CA (father, diagnosed age 64). Patient's father is s/p surgery and doing ",0,0,0,0,0,1,1,1,1,1
+126630417.xml,Would this patient benefit from any interventions to address social determinants,He described strong social support from his supportive wife (married 59 years),1,1,0,1,0,1,1,1,1,0
+125513857.xml,Could this patient's symptoms be attributed to a side effect of one of their cur,This raises concern in light of known kidney stone side effect secondary to Topamax use.,1,1,0,0,0,1,1,1,1,0
+128065252.xml,Is any additional testing or screening recommended for this patient due to an el,"Female, 45 years old, with family history of breast  cancer (maternal grandmother, age 60; maternal ",1,1,0,1,0,1,1,1,1,0
+128478486.xml,Summarize the patient's care team including primary care and specialist provider,"Wood Haven Grayson Klas, MD, PhD",1,1,0,0,0,0,0,0,0,0
+128065252.xml,Does this patient have any significant family history mentioned in their chart t,"""Female, 45 years old, with family history of breast  cancer (maternal grandmother, age 60; maternal",1,1,0,1,0,1,1,1,1,1
+127116955.xml,Identify the tests and screening interval recommended for this patient for breas,"IMPRESSION/PLAN: 38 Y female with grade 2 IDC of the left breast stage I, T1c N0 M0, ER/PR positive,",0,0,1,0,0,1,1,1,1,1
+127116955.xml,What cervical cancer screening testing and interval is recommended for this pati,"""Screening for cervical cancer  Pelvic exam normal , Pap done.
+Followup:  Return in about 1 year</no",0,0,0,0,0,1,1,1,1,1
+128035286.xml,Has this patient been hospitalized previously? If so what were the reasons for h,"<note type=""emergency department note"" start=""03/22/2020 09:55"">For fist time, she dyed here hair at",1,1,1,1,1,1,1,1,1,1
+128065252.xml,Is this patient at elevated risk for osteoporosis?,"""Gender: FEMALE""",1,1,0,1,0,1,1,1,1,0
+125582204.xml,Are there any contraindications to use of NSAIDs for this patient?,"Please continue to avoid ANY alcohol and any NSAIDs including ibuprofen, aspirin, motrin, aleve, etc",0,0,0,0,0,1,1,1,1,0
+128309987.xml,Summarize the upcoming visits for this patient in the next 6 months and the purp,We will see the patient back in 6-8 weeks,0,0,0,0,0,1,1,1,1,0
+124724147.xml,"Check this long CT report for inconsistencies, e.g. check if the reported sides ","<note type=""procedure note"" start=""08/01/2015 16:38"">FINAL REPORT PROCEDURE: CT CALCIUM SCORING* IND",0,0,1,1,0,1,1,1,1,1

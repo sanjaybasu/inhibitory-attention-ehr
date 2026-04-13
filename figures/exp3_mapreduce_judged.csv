@@ -1,0 +1,288 @@
+filename,question,position,evidence,mapreduce_response,n_chunks,mapreduce_judge
+126391686.xml,Please show the patient's vital signs over the past 6 months,0.5757097791798107,Vitals  Temp 36.7 C (98 F)  | Wt 10.4 kg (22 lb 14.5 oz)|||Vitals  Temp (!) 36.2 C (97.1 F)  | Wt 10.7 kg (23 lb 8 oz)  | SpO2 99%|||Vitals  Pulse 136  | Temp 36.9 C (98.4 F)  | Wt 10.2 kg (22 lb 7 oz)  | SpO2 99%|||Vitals:  BP: 98/55  Pulse: 144  Temp: (!) 38.4 C (101.2 F)  Resp: 34  Weight: 8.9 kg (19 lb 9.9 oz)  BMI (Calculated): 31.3,"Based on the patient records provided, here is a summary of the patient's vital signs over the past 6 months:
+
+- **Body Temperature**: Ranged from 97.6°F to 103.2°F (36.4°C to 39.6°C)
+- **Heart Rate**: Varies between 112 and 167 beats per minute
+- **Respiratory Rate**: Fluctuates between 26 and 58 b",19,0.0
+127022669.xml,Does this patient take chronic steroids?,0.7543741588156124,Medications: x 80 mg lasix per day - dose was increased from 40 mg,"No, based on the patient records summarized, the patient does not take chronic steroids.",44,1.0
+126326545.xml,Does this patient have any first degree relatives with early cardiovasulcar death,0.195,"FAMILY HISTORY:  Her mother has no history of diabetes, cardiovascular disease, or hypertension, but was diagnosed with malignant melanoma in her 30s.  Her biological father lives outside of the home, and he has had heart issues, starting at 35 years of age.  Paternal grandfather is deceased from unknown cause, and paternal Grandmother is alive in her 80s, and her health is unknown.  Maternal grandfather is deceased from a myocardial infarction in his 30s, and maternal grandmother is deceased from an accident.  Maternal great-grandmother, who is alive in her late 80s, has hypertension and type 2 diabetes.  Maternal great-grandfather has had a form of cancer.","No, the patient records do not mention any first-degree relatives with early cardiovascular death.",6,0.0
+127790341.xml,Are there any firearms at home?,0.4104938271604938,No firearms in the home,"Based on the patient record summaries provided, there is no information indicating whether there are any firearms at home for any of the patients mentioned.",9,0.0
+124983950.xml,Provide contact information of this patient's care team.,0.6279926335174953,"Dominican Hospital (Dignity Health) 661 42nd St, Rockford IL (999-999-9999","Based on the patient record summaries provided, the contact information for the patient's care team is not explicitly detailed in all summaries. However, some specific contacts are mentioned:
+
+1. **Stanford Kidney Transplant Office**: 
+   - Phone: (999-999-9999)
+   - Fax: (999-999-9999)
+   - Nurse C",18,0.0
+127159023.xml,Does this radiology report contain critical results that need to be communicated?,0.9403409090909092,"<note type=""procedure note"" start=""01/17/2023 08:17"">EXAM: MR BREAST W AND WO IV CONTRAST BILATERAL 01/16/2023 INDICATION: Female, 64 years old, screening, elevated risk of breast  cancer.  Elevated risk screening (with contrast, and implant sequences if  implants), Prior high risk lesion. COMPARISON: 06/29/2023, 12/19/2022, the left breast.  Right right breast.  There is a stable 0.8cm t2 hyperintense mass in the anterior upper outer  right breast. Other Findings: None significant.</note>|||At 8:30-9:00, 9 cm FN there is nodularity that is tender to palpation, no distinct mass.
+3:00, 9 cm fn there is tenderness to palpation  with no palpable abnormality.
+Radiology  07/13/2023 mammo - benign  01/16/2023 MRI breast - benign
+Assessment and Plan  Shultz is a 64 There is no clinical evidence of disease on recent MRI. She has 2 areas of concern, including right breast 8:30-9:00, 9 cm FN nodularity that is very tender to palpation but no mass, and left breast 3:00, 9 cm fn. These are probably benign in lieu of the recent MRI, but she would like to undergo diagnostic ultrasound evaluation to further evaluate.","No, the radiology report does not contain any critical results that need to be communicated.",22,1.0
+126061094.xml,Does this patient have claustrophobia?,0.6672850958565244,"""Please let staff know if you have any of the following:
+? Significant pain, anxiety or claustrophobia""","Based on the provided patient records, there is no information indicating that the patient has claustrophobia. The records primarily focus on the patient's medical history, treatments for ependymomas, and various medical procedures and symptoms, without mentioning any psychological conditions or sym",46,0.0
+125332989.xml,Provide a detailed obstetrical history for this patient.,0.0,"She is G-III, P-I, 0, 2, 1. She has a son. Her age at first term pregnancy is 35.","She has a family history of breast cancer and a history of chronic UTIs, hepatitis A, mononucleosis, and essential hypertension. She is currently on multiple medications.
+The patient is a 67-year-old female with a history of psoriatic arthritis, breast cancer, and essential hypertension. She has a p",72,0.0
+125135676.xml,This patient has a newly detected small lung nodule (2 mm) in his left upper lobe attached to the pl,0.2606691703653124,"CLINICAL HISTORY: 70 years of age, Female, lung nodule (7mm)","odule of this size, the recommended management includes a low-dose CT scan for follow-up in 6 months, with further imaging or biopsy if there is any change in the nodule's appearance.
+The patient has a newly detected small lung nodule (2 mm) in the left upper lobe attached to the pleura. According t",176,0.0
+126289805.xml,Does she smoke?,0.6,Tobacco smoking status Never,"Based on the provided patient records, there is no information about whether the patient smokes.",11,0.0
+128506257.xml,"Does this patient often ""No Show"" for scheduled appointments?",0.5089285714285714,"Patient has ""No Show"" to UDS appointmenter with Dr Rosario x 2 on 02/12/2022 and 05/14/2022","Based on the provided summaries, the patient does not often ""no show"" for scheduled appointments. Specifically, the patient has attended multiple appointments and there are instances where they missed urodynamics appointments with Dr. Vann, but these are noted as exceptions rather than a frequent pa",5,0.0
+125066519.xml,Has the patient ever had a venous thrombotic event?,0.943661971830986,No prior personal history of VTE,"No, the patient has never had a documented history of a venous thrombotic event.",7,1.0
+127228947.xml,What details are missing from this clinical history that may be important in developing a differenti,0.9779411764705882,"Demography:  Age: 75 Y  Sex: male
+[] Hispanic  [x] Not Hispanic or Latino  [] Not Reported  [] Unknown  Race
+[] Black or African American
+[] Native Hawaiian or Other Pacific Islander
+[] American Indian or Alaska Native
+INCLUSION/EXCLUSION CRITERIA:  QUALIFYING EVENTS:  Statin Therapy:  Has the participant been on a stable and well tolerated dose of atorvastatin =&gt;40 mg DAILY or rosuvastatin =&gt;20 mg DAILY for at least 4 weeks? Yes  Statin name, dose, frequency: Atorvastatin 80 mg daily
+Indication for statin: Atherosclerotic cardiovascular disease
+If date unknown, was statin started before or after consent:  Before consent
+Myocardial Infarction:  Myocardial infarction  (MI) Yes
+If yes, date of most recent MI: Unknown' date of most recent documentation of MI: 07/04/2021
+If yes, type of MI:
+[] STEMI  [] NSTEMI  [x] Unknown
+If yes, method of MI diagnosis:
+[x] Echocardiogram - apical akinesis  [x] Nuclear stress test - hypokinesis of mid anterior and apical walls","Several important details are missing from the clinical histories that could be crucial in developing a differential diagnosis:
+
+1. **Personal History:**
+   - Marital status
+   - Number of children
+   - Occupation
+   - Sexual activity history
+   - Smokeless tobacco use
+   - Alcohol consumption
+   - ",40,0.0
+125598950.xml,Were any adverse reactions to local anesthetics reported in this patient in the past?,0.958041958041958,"However, she is allergic to local anesthetics","No adverse reactions to local anesthetics were reported in this patient in the past, except for the patient's current allergy to local anesthetics noted in the history of present illness section.",9,0.0
+125332989.xml,List past medical history based on all prior clinical notes.,0.0,"HISTORY OF THE PRESENT ILLNESS: Mrs. Zapata has been followed by yearly  mammograms. On a recent mammogram done on 05/28/2003, an abnormality  was found. A development of a 1 cm area of heterogeneous  microcalcifications located in the right breast at the 7 o'clock position  in the lower outer quadrant located 9 cm from the nipple. The patient was  advised to have that area biopsied as it was suspicious for malignancy. Of  note, there are no suspicious lesions in her left breast. On 06/04/2003, the patient underwent core needle biopsy of the suspicious area in  her right breast. The pathology report showed diffuse patches of  high-grade DCIS (ductal carcinoma-in-situ), that measured 2 mm in greatest  dimension, solid and comedo type, with microcalcifications, located at the  7 o'clock position in the right breast, 9 cm from the nipple. No ER/PR  staining was done at that time.
+The patient has a lung nodule measuring approximately 1.7 x 1.5 cm in the  superior segment of the right lower lobe of her lung. It was discovered in  1999. The patient reports that it was biopsied in 09/31/1999 and  although we do not have a report of the biopsy the patient tells us that it  was diagnosed as a benign hamartoma. We do have chest CT scan reports  dating from 1999 yearly to a recent one done on 06/18/2003, all of which  describe this nodule as remaining stable. It has not grown or changed in  approximately four years. Today, Mrs. Zapata presents to Breast Tumor  Board in order to discuss her therapy options and to obtain  recommendations.","), and a solitary lung nodule. She is a former smoker and has a family history of cardiovascular disease, hypertension, and diabetes.
+The patient has a past medical history including psoriatic arthritis, chronic UTIs, breast cancer (DCIS), hypertension, and a lung hamartoma. She is currently on losa",72,0.0
+126630417.xml,Whata are the patients most significant social determinants of health that need to be addressed?,0.91995841995842,"He described strong social support from his supportive wife (married 59 years), good relationships with his adult children, good friend Plaisance, close friendships and good relationships with his church community. He shared that his wood working hobby is a source of joy when back pain doesn't prevent him from standing he enjoys his wood working projects. He is an avid reader and enjoys going to Zumbro Falls  every Saturday.|||Patient lives in a large acreage property in Hotchkiss  and also has a coastal home in Cheraw  where he enjoys spending time.|||He is retired, no specific financial concerns brought forward during today's visit and no specific mention of financial barriers to health care services|||Newcomer has full health insurance coverage with his Medicare Part A &amp; B coverage and Blue Cross PPO as secondary coverage. He notes that for all back injury related care he must receive approval through workman's comp for these health care services.|||Patient has excellent social support","Based on the patient records provided, the most significant social determinants of health that need to be addressed include:
+
+1. **Substance Use**: Past and current smoking, use of smokeless tobacco, and alcohol consumption.
+2. **Obesity**: Excessive body weight and related health issues.
+3. **Marit",29,0.0
+125232065.xml,Which diuretics has this patient tried,0.1918955776349113,"on lasix and spironolactone for diuresis|||edema, which is now well managed on diuretic therapy. aripiprazole 2 mg twice daily, aspirin 81 mg daily, calcium citrate, vitamin D 3 one tablet daily, venlafaxine 50 mg daily, furosemide 20 mg daily, lovastatin 10 mg at night time, rivastigmine 9.5 mg for 24-hour patch, spironolactone 100 mg daily, multivitamin tablet.","though the notes do not specify the exact dosages.
+The patient has tried furosemide (Lasix) as a diuretic. No other diuretics are mentioned in the provided notes.
+The patient has tried furosemide (Lasix) as a diuretic. No other diuretics are mentioned in the provided notes.
+The patient has tried fur",149,0.0
+124609382.xml,Is the patient involved in selling guns or other firearms out of his home?,0.5431472081218274,denies  access to guns,"Based on the patient records provided, there is no information indicating that the patient is involved in selling guns or other firearms out of his home.",7,0.0
+125477011.xml,What days of the week does he get dialysis?,0.3535453943008615,dialysis MWF,"Based on the provided patient record summaries, the patient receives dialysis on Mondays and Thursdays. This pattern is consistent and explicitly mentioned for Yahir Skowron and Dokan Bulman. For other patients, the specific days of the week are not mentioned in the provided notes.",91,0.0
+126288775.xml,Has there been issues with non-compliance,0.8317214700193424,"""Pt stated that he has made attempts to follow up with outpatient MH, but doesn't go to appts if he has enough depakote."" ||| ""However patient refused PO risperidone nightly, and received PRN zyprexa instead""","were no issues with non-compliance noted in the clinical notes. The patient was compliant with his medications, including divalproex, and was described as calm and cooperative during the visit.
+There were no issues with non-compliance noted in the clinical notes. The patient was compliant with his m",77,0.0
+125775163.xml,What is the patient's vaccination history for COVID,0.6050347222222222,COVID-19 Vaccine (3 - Booster for Slepian series) 05/29/2022,"Based on the provided patient record summaries, the patient's vaccination history for COVID is not mentioned in the provided clinical notes.",36,0.0
+124819611.xml,"How often has this patient ""No Showed"" for appointments in the past five years?",0.6867469879518072,"""Pt had a new pt appt back in Jan.but he was a no show.""","Based on the provided patient record summaries, it is not possible to determine how often this patient has ""No Showed"" for appointments in the past five years. The clinical notes do not contain any information regarding appointment attendance or missed appointments.",13,0.0
+126170351.xml,How many fetal ultrasound examination did we perform in 2021 in our institution?,0.1711409395973154,"<code>[CPT4/76805] Ultrasound, pregnant uterus, real time with image","Based on the provided clinical notes, the institution performed two fetal ultrasound examinations in 2021. The first was conducted on July 13, 2021, for a fetal anatomy survey, and the second on July 27, 2021, to complete the fetal survey.",27,0.0
+126738871.xml,How much does she drink usually?,0.9100817438692098,Comment: 2 drinks per month,"Based on the patient record summaries provided, the patient, Ayanna Rumble, reports drinking ""1 drink every few weeks"" according to her social history documented in the 2020-11-05 progress note. However, the clinical notes do not provide any additional information about her usual alcohol consumption",23,0.0
+125014561.xml,What barriers to discharge for patients on my team can I address today?,0.6082920792079208,"Barriers to discharge plan: Lack of family support, Patient hesitance","Based on the patient records provided, the following barriers to discharge can be addressed today:
+
+1. **Pain Management**:
+   - Several patients report significant pain (e.g., VAS scores of 7-8), which is a primary barrier to discharge. Addressing pain management plans, including opioid tapering st",48,0.0
+127952117.xml,"What the patients body weight over the past five years, include all recorded changes",0.1111111111111111,<code>[LOINC/29463-7] Body weight 104.23 ounces</code>,"Over the past five years, the patient's body weight has shown several notable changes:
+
+- Initial weight at birth on November 5, 2020: 3.19 kg (7 lb 0.5 oz)
+- Weight on November 6, 2020: 107.06 kg
+- Weight on November 7, 2020: Not specified, but it was shortly after birth and represented a 5% decrea",10,0.0
+127897783.xml,Has the patient experienced any adverse reactions to antibiotics?,0.0648854961832061,<code>[ICD/T36.0X5A] Penicillin adverse reaction</code>,"Based on the patient record summaries provided, there is no mention of any adverse reactions to antibiotics.",8,0.0
+125051295.xml,"How much does the patient drink, low long has he/she been sober, when/if the patient completed rehab",0.0938628158844765,"New patient visit  Video visit to discuss alcoholism  History of alcohol abuse for many years  Was previously with Alkhoury and has done in-patient and out-patient rehab  -was under psychiatry (Dr Neblett) - saw them once every 3 months  In the past, has had 3 yrs of continuous sobriety continuous, then recently 6.5 months  Broke sobriety recently - today is day 1  Looking for alcohol rehab options - just started a job at Cisco in May, would prefer to explore out-patient options first, but would be willing to do in-patient if needed
+Broke up with boyfriend last fall  Moved in with mom and step dad since (sharing a duplex), has  dog  High stress levels with shelter in place, and with living with mother  -trying to pay off bills, has been told by her mother that she can't drink  -mom is motivation to stop drinking  Denies any additional stressors/triggers
+Has been drinking every night - reports 0.5 pint vodka/night  Denies any drug use  Smokes when drinking, can go through about 1 pack/week","The patient drinks approximately 4-5 drinks per day. They have been sober since completing their most recent rehab program in June 2022. The patient has completed multiple rehab programs but is hesitant to enter another 30-day program, having been through rehab seven times.",9,0.0
+126007728.xml,Is the patient compliant in taking medications,0.7554417413572343,"Regarding medications, she is compliant with her Tecfidera therapy. She still has occasional flushing sensation, but otherwise, is doing well. She is also compliant with her vitamin D therapy.","Based on the patient record summaries provided, the compliance with medications varies among different patients. For some patients, such as Ms. Wilfred Leavitt and the 43-year-old female with relapsing-remitting multiple sclerosis, there is clear evidence of compliance with medications like Copaxone",24,0.0
+128507005.xml,Summarize the patients ED/ urgent care visits over the past 5 years,0.0068965517241379,"<note type=""emergency department note"" start=""12/02/2015 23:53"">Triage: had concerns including Allergic Reaction.
+ID: Nikolas Scroggins is a 25 Y female past medical history of asthma and eczema
+HPI Pierce Raj is a 25 Y female who presents with concern for peanut allergy. Patient has a known history of peanut allergy, patient was having a few drinks at a bar this evening when she developed itching all across her body. At that time she was given some Benadryl and promptly threw that up. She is brought in by EMS. Patient denies any sort of voice changes or difficulty breathing.","treatments related to allergies. The treatments involved incremental increases in allergen doses, with detailed records of each session noting the patient's response. The patient has consistently reported no systemic reactions and minimal localized reactions, with the dosing schedule adjusted
+Over t",58,0.0
+128226755.xml,Summarize the most recent annual physical with the PCP,0.939879759519038,"Physical Exam  Vital Signs in the last 24 hours:  Temp  Avg: 37.6 C (99.7 F)  Min: 36.7 C (98.1 F)  Akerman: 38.8 C (101.8 F)  Pulse  Avg: 96.4  Min: 83  Max: 105  BP  Min: 91/59  Max: 124/53  Resp  Avg: 23.4  Min: 20  Max: 30  SpO2  Avg: 97.9 %  Min: 97 %  Max: 99 %
+Systolic (24hrs), Avg:107 , Min:91 , Yamaguchi:124
+Diastolic (24hrs), Avg:63, Min:50, Northington:88
+Intake/Output Summary (Last 24 hours) at 01/08/2022 1455  Last data filed at 01/08/2022 1300  Gross per 24 hour
+General Appearance: pleasant, cooperative, NAD, mildly anxious affect  HEENT: atraumatic, no JVD, MMM  Respiratory: CTAB, symmetric chest expansion
+Cardiovascular: RRR, nl S1, S2
+Abdomen: soft, nt, nd  Neurologic/Psychiatric: AAOx4, cn2-12 intact  Extremities: no c/c/e, warm, well-perfused","The most recent annual physical with the PCP for Luca Tadayon showed a body weight of 1418 lbs, a body surface area of 1.33 m², and no significant changes in height (62.79 inches). Vital signs were within normal limits, including a temperature of 36.7°C (98°F), blood pressure of 107/72 mmHg, heart r",15,0.0
+126529055.xml,"Summarize all inflammation/ rheumatological lab tests the patient has had in a table, include dates,",0.7014388489208633,patient was referred to rheumatology for further lab workup.,"Based on the provided patient records, there are no specific inflammation or rheumatological lab tests mentioned. Here is a summary of the relevant information:
+
+| Date       | Test Name                       | Value          | Abnormal Results Highlighted |
+|------------|---------------------------",25,0.0
+125527716.xml,Show me the drinking history of this patient,0.2707873436350257,Also continues to have 2-3 drinks of wine only for many years.,"Based on the patient records provided, the drinking history of the patient is as follows:
+
+- **Patient: Sumiko Orr**
+  - Drinking history: 14 standard drinks of wine per week (documented in her social history during a consultation on 2021-02-24).
+
+- **Patient: Vicky C Quintana**
+  - Drinking history",42,0.0
+127310221.xml,"Based on the information I've included under HPI, what is a reasonable differential diagnosis?",0.8854314002828855,HPI: Vanesa Najjar is a 29 Y female patient here for strong family history of malignancy including maternal history of ocular and cutaneous melanoma.,"Based on the information provided under the History of Present Illness (HPI), a reasonable differential diagnosis for the patient includes iron deficiency anemia, given the low serum iron (82 μg/dL) and iron saturation (25%), along with normal thyroid function as indicated by the TSH level of 1.87 m",21,0.0
+124938510.xml,"Create patient instructions that summarize all the patient's medications, including precautions on d",0.7651006711409396,atorvastatin (Lipitor) 40 mg tablet take 1 Tablet (40 mg total) by mouth daily 90,"### Patient Medication Summary and Instructions
+
+**Patient Information:**
+- **Name:** [Patient Name]
+- **Age:** 53 years
+- **Medications:**
+  - **Aspirin 81 mg daily**
+  - **Atorvastatin 40 mg daily**
+  - **Bupropion 150 mg extended-release daily**
+  - **Levonorgestrel 20 mcg/24 hr IUD**
+
+**Precauti",35,0.0
+127858887.xml,"Create patient instructions for supportive care for an upper respiratory tract infection, including ",0.2708102108768035,"""1. Sore throat  POCT Rapid Strep A
+2. URI (upper respiratory infection)""","### Patient Instructions for Upper Respiratory Tract Infection
+
+**Supportive Care:**
+- **Rest:** Ensure adequate rest to help your body fight off the infection.
+- **Hydration:** Drink plenty of fluids to stay hydrated and help thin mucus.
+- **Humidifier:** Use a cool-mist humidifier to ease congesti",25,1.0
+127680685.xml,Who was the referring provider and what is the consult question?,0.618,"<note type=""note"" start=""11/24/2022 13:40"">Referrals needed?: Yes, pended Gyn and GI
+Health Maintenance to Gyn, pended
+Referral type: Consult, treat, and follow for ongoing management.
+61 Y female, referred for pap smears, women's health, etc.
+East Bay Women's Health  3300 only.  61 Y female, referred for colonoscopy.  Never done","The referring provider was Dr. Ordonez. The consult question is related to a follow-up visit for a 61-year-old female patient, Mckenzi Potempa, who presented for her annual physical exam and received the second dose of the Shingrix vaccine.",16,0.0
+128074264.xml,"Summarize all infectious laboratory work up the patient has had in a table, including date and resul",0.0093167701863354,<code>[SNOMED/122325001] Cytomegalovirus DNA assay Not Detected</code>|||     <code>[LOINC/736-9] Lymphocytes/100 leukocytes in Blood by Automated count 51.80 %</code>,"Based on the provided patient records, there are no specific infectious laboratory tests that were abnormal. Here is a summary of the infectious laboratory work-up, including dates and results, with any abnormal values highlighted:
+
+| **Date**       | **Test**                       | **Result** | **",42,0.0
+125513857.xml,Did he ever have a blood pressure above 160 this admission?,0.3177041228779305,Systolic blood pressure 134,"Based on the patient records provided, there is evidence that the patient's systolic blood pressure did exceed 160 mmHg during some admissions. Specifically, on October 6, 2010, the patient's systolic blood pressure reached 160 mmHg, and on other occasions, it peaked at 132 mmHg, 152 mmHg, 139 mmHg,",39,0.0
+127171480.xml,Does the patient typically sleep a lot during the day?,0.9514010507880912,"Sleep: Interrupted by pain,","Based on the provided patient records, there is no consistent information indicating that any of the patients typically sleep a lot during the day. The records either explicitly state that the patient does not sleep a lot during the day, do not mention any information about daytime sleeping habits, ",48,0.0
+125615374.xml,Did the patient need assistance when walking with physical therapy?,0.4605348988910632,Gait Level of Assist : Moderate,"be elevated, and she was prescribed lisinopril to manage her hypertension.
+The patient did not require assistance when walking during physical therapy sessions, as documented in the progress notes. The patient was able to walk independently and was engaged in activities such as watching TV and parti",91,0.0
+127092346.xml,"Summarize the list of specialists that this patient has seen in the last year, including dates and r",0.2419967444384156,"""She saw a geneticist and MicroArray was negative for her.  Genetic testing for both parents were negative.  She saw endocrinologist in 2018, Dr. Potter.""","Based on the provided patient records, the patient has seen the following specialists in the last year:
+
+1. **Allergist**:
+   - **Date**: April 3, 2016
+   - **Reason**: Allergy testing (serum IgE antibody levels for various allergens, leukocyte count, and alkaline phosphatase levels)
+
+2. **Clinical ",51,0.0
+126705564.xml,What antihypertensives does she take?,0.914044152184124,lisinopril;,"Based on the patient records, the antihypertensive medications the patient takes include:
+
+- Lisinopril (doses vary: 5 mg, 10 mg, 15 mg BID, 20 mg, 40 mg)
+- Carvedilol (6.25 mg BID)
+- Doxazosin (4 mg BID)
+- Hydrochlorothiazide (25 mg daily)
+
+Other medications mentioned but not specified as antihyper",67,0.0
+126289805.xml,Does she do any drugs?,0.504,Denies history of other substance use within the last 12 months,"Based on the patient records provided, there is no clear indication that any of the patients currently use drugs, except for Star Arons, who reports past use of cannabis but denies current use.",11,1.0
+125619898.xml,Has this person seen neurology before?,0.6762589928057554,Stanford Children's Hospital Neurology Clinic at CPMC last visit in Neurology was on 11/01/2020.,"Yes, this person has seen neurology before.",4,1.0
+125298501.xml,How long has she had a hemoglobin a1c over 6?,0.8309012875536481,Hemoglobin A1c/Hemoglobin.total in Blood 6.50 %,"Based on the provided patient records, the duration for which the patient has had a hemoglobin A1c over 6% varies depending on the individual patient. For some patients, the records specify a starting point, such as:
+
+- Cynthia Traina: Since March 2, 2013.
+- Nathalie Jose: Since her diagnosis in Nov",35,0.0
+125802130.xml,Has she had a history of depression?,0.4204545454545454,"She denies any symptoms consistent with mania, hypomania or depression.","No, there is no specific mention of a history of depression in the provided patient records.",3,0.0
+126358217.xml,Who is the resident doctor who last saw this patient?,0.7321509777171441,Medical Student/Resident/Fellow: Fisk,"The resident doctor who last saw the patient is not explicitly named in the provided records. However, the last recorded interaction was on January 28, 2023, where donepezil hydrochloride 5 mg oral tablet was prescribed. Given the context, while no specific name is provided, the prescription activit",66,0.0
+124691610.xml,Which MR contrast agents were used in this patient in the past?,0.146690518783542,"""PROCEDURE COMMENTS: MRI of the cervical spine was performed before  and after administration of 13 mL IV Multihance contrast""","Based on the patient records provided, the only specific MR contrast agent mentioned for this patient is gadobenate dimeglumine (Multihance), which was used during a stereotactic MRI of the upper thoracic spine on 2020-11-06 for pretreatment planning. No other specific MR contrast agents were mentio",30,0.0
+125718675.xml,List all previous MR examinations in this patient that depicted the liver.,0.4564102564102564,<code>[LOINC/24587-8] MR Brain WO and W contrast IV,"Based on the provided patient record summaries, the only previous MR examination that depicted the liver is:
+
+- An MRI of the abdomen performed on 06/23/2021.",18,0.0
+125191041.xml,Was a decline in kidney function observed after iodinated contrast agent administration in this pati,0.0384615384615384,"""Multidetector CT of the abdomen and pelvis was performed following intravenous administration of iodinated contrast""",No decline in kidney function was observed after iodinated contrast agent administration in this patient in the past.,7,0.0
+126412809.xml,This report contains measurements of target lesions in this patient with lung cancer. Retrieve the r,0.9513020833333332,"Lungs: Mildly hyperaerated. Nodular densities are seen bilaterally,","RECIST criteria.
+The clinical notes do not contain any measurements of target lesions in the patient with lung cancer. Therefore, there is no data available to assess changes in lesion size according to RECIST criteria. The notes primarily include ventilator settings, blood pressure readings, heart ",116,0.0
+126724211.xml,We were not able to perform the scheduled MRI exam in this patient due to claustrophobia today. Plea,0.6244798890429958,"""Thus, MRI was obtained urgently, though Pt tolerated only diffusion and very poor initial vessel imaging, due to claustophobia. Her respiratory status was too tenuous to give ativan, so scan was aborted, with initial images neg for acute stroke""",We were not able to perform the scheduled MRI exam in this patient due to claustrophobia today. This episode should be documented in the patient chart.,88,1.0
+126999848.xml,Was antibiotic treatment initiated in this patient within the past month?,0.9611451942740288,nitrofurantoin (Macrodantin) 50 mg capsule 30 Capsule,"Yes, antibiotic treatment was initiated in this patient within the past month. Specifically, the patient was prescribed nitrofurantoin 50 mg on 10/27/2022 for a post-coital urinary tract infection.",14,1.0
+127882600.xml,What are this patient's current clinical symptoms?,0.973655323819978,33 yo G2P0020 who presents for: 1. Unexplained,"Based on the provided patient records, the patient's current clinical symptoms are not explicitly stated. However, the records mention a history of migraines, breast tenderness, fatigue, and an abnormal Pap smear result indicating atypical squamous cells that cannot exclude HSIL (ASC-H). There are n",25,0.0
+128126942.xml,This is a complex whole body PET/MR report. Provide a version of this report that is more concise an,0.8679950186799502,"procedure note"" start=""01/33/2018 03:02 PM"">PET MRI","), and a slightly elevated alkaline phosphatase (150 U/L). The patient is undergoing radiation therapy for stage IIIA Hodgkin lymphoma.
+The patient, a 27-year-old male with a history of stage IIIA classical Hodgkin lymphoma, is receiving consolidation radiation therapy. His latest lab results includ",95,0.0
+128163935.xml,Does this patient receive treatment for hyperthyroidism?,0.8378378378378378,"""Does the patient have a history of Hypothyroidism?""","No, based on the provided patient record summaries, the patient does not receive treatment for hyperthyroidism. The clinical notes focus on issues such as low back pain, lumbar radiculopathy, and other conditions, with no mention of hyperthyroidism or related treatments.",6,0.0
+124978474.xml,I have seen an abdominal CT exam if a female patient with diverticulitis today. I would like to appe,0.5929319371727748,Most recent CT scan shows stool,"Based on the patient record summaries provided, the following patients had an abdominal CT exam for diverticulitis:
+
+1. **Kristen Fierro** - Presented on September 4, 2022.
+2. **Hiedi Tolley** - Evaluated in the emergency department on an unspecified date, but mentioned to have a history of bipolar ",24,0.0
+124915919.xml,What is due for patient's health maintenance,0.840782122905028,"<note type=""note type"" start=""07/24/2021 12:20"">Called for population health outreach to inform patient of health maintenance items due:
+- Colorectal Cancer Screening  FOBT kit ordered and will be mailed to home address.</note>","For the patient's health maintenance, the following tasks are due:
+
+1. DTaP/Tdap/Td immunization (last received on 07/22/1989)
+2. Influenza vaccine (due on 09/09/2020)
+3. Second dose of the COVID-19 vaccine (in two weeks)
+4. Zoster vaccine (next dose due on 07/22/2020)
+
+Additionally, the patient nee",11,0.0
+128275759.xml,"has this patient ever had a colonoscopy? if so, when was it and what were the findings?",0.6538461538461539,"""The colonoscopy was performed with
+ease. The patient tolerated the procedure well. The quality of the bowel
+preparation was adequate to identify polyps. The quality of the bowel
+preparation was evaluated using the BBPS (Boston Bowel Preparation
+Scale) with scores of: Right Colon = 3, Transverse Colon = 3 and Left
+Colon = 3 (entire mucosa seen well with no residual staining, small
+fragments of stool or opaque liquid). The total BBPS score equals 9. Findings:
+A 3 mm polyp was found in the descending colon. The polyp was sessile.
+The polyp was removed with a cold snare. Resection and retrieval were
+The exam was otherwise without abnormality on direct and retroflexion
+- One 3 mm polyp in the descending colon, removed with a
+cold snare. Resected and retrieved.""","Based on the provided patient record summaries, the patient has had a colonoscopy. The most recent summary indicates that the colonoscopy was performed on December 1, 2019, and a tubular adenoma was found in the descending colon, which was removed.",12,0.0
+127203907.xml,"Summarize the patient's fluid intake and output measurements, including intravenous fluids, oral int",0.4580369843527738,Previous 0600 - 0559Since 0600Intake1825.9 mL53.9 mL/kg/24hrs180 mL5.3 mL/kg/10hrs220 mL Infusions180 mL Oral618 mL Meds838 mL Oral150 mL OtherOutput1 mL0 mL/kg/hr UOP0 mL mL/kg/hr UOP1 mL Urine1  Void Count4  Void CountBalance1824.9 mL180 mL,"Based on the provided patient records, here is a summary of the fluid intake and output measurements:
+
+- **Intravenous Fluids**: Volumes varied; specific amounts were not consistently documented. Notable instances include 1500 mL, 500 mL, and 1000 mL.
+- **Oral Intake**: Volumes ranged widely, from 1",22,0.0
+127159232.xml,This is the report of the last oncologic PET/MR examination. Please list items that I should check a,0.0587496072887213,She had a negative PET scan in 09/23/2019 and anoscopy with surgery team,"examination, the patient has no evidence of residual, recurrent, or new metastatic disease in the abdomen or pelvis. The patient's glomerular filtration rate is 93, indicating normal kidney function. No specific abnormalities in blood counts were noted, with all values falling within normal ranges. ",98,0.0
+126999848.xml,What are this patient's age and weight?,0.4110429447852761,Weight: 120.6 kg (265 lb 12.8 oz) ||| Age in Years: 39,"Based on the provided patient record summaries, the patient's age is 39 years old. However, the patient's weight is not mentioned in any of the clinical notes.",14,0.0
+126110968.xml,Is the patient ordered to have nothing after midnight?,0.8026246719160105,experimenting with a low FODMAPs diet.,"Based on the patient record summaries provided, the patient is not ordered to have nothing after midnight in the majority of the cases. There are specific instances where the patient is ordered to have nothing after midnight, particularly for pre-operative fasting or specific medical conditions like",58,0.0
+124602840.xml,Who is the patient's medical decision maker?,0.4191343963553531,"Summary response to observation:  Lichin Theberge  87 year old female with PMHx of dementia, neuropathy and anemia. Patient was brought in to the ED s/p fall 1 day prior. Was walking with walker and fell backwards. In the ED had pan scan which showed T12 compression fracture with 25 % vertebral loss and 4 mm retropulsion. Neurosurgery recommended TSLO brace, and follow up with neuro IR outpatient for possible vetebroplasty.
+While in the CDU patient had two episodes of emesis. Emesis was brown rust in color, gastrocult was positive. CBC stable and VS stable. Per chart review patient had some mild esophageal thickening and was advised by GI to get EGD for further evaluation. Recommended that given her episodes of emesis strongly advised to get EGD done. Patient's daughter Teagle would is her medical decision maker agrees and plans to coordinate outpatient EGD. Strict return precautions discussed, with patient's daughter who verbalizes understanding.","The patient's medical decision maker is her daughter. This is indicated in multiple patient records, particularly in notes where the daughter is present, provides care, or is discussed in relation to the patient's care decisions.",13,1.0
+126775072.xml,This is a screening mammography. Breast density on both sides category A. BIRADS 1. Image quality ex,0.6409395973154363,"<code>[CPT4/77067] Screening mammography, bilateral (2-view study of each breast), including computer-aided detection (CAD) when performed</code>","### Structured Report
+
+**Patient Information:**
+- **Age:** Not specified
+- **Procedure:** Screening Mammography
+- **Breast Density:** Category A (Extremely Dense)
+- **BI-RADS Classification:** 1
+
+**Findings:**
+- **Image Quality:** Excellent
+- **Breast Density:** Bilateral breast density categorized ",27,1.0
+126630417.xml,Please compile the patient's current social determinants of health risks from notes and discrete fie,0.91995841995842,"Background: Pro suffered a workplace back injury and suffers from chronic back pain, he reports that he also has some memory loss and has noticed some mild cognitive changes. He reports that his chronic back is a greater source of distress and pain than his cancer and described high confidence in his cancer care plan.
+Support System (family, social, community): He described strong social support from his supportive wife (married 59 years), good relationships with his adult children, good friend Plaisance, close friendships and good relationships with his church community. He shared that his wood working hobby is a source of joy when back pain doesn't prevent him from standing he enjoys his wood working projects. He is an avid reader and enjoys going to Zumbro Falls  every Saturday.
+Surrogate Decision  Maker/Advanced Directive: Patient identified his wife Janet Swain as his emergency contact
+Living Situation: Patient lives in a large acreage property in Hotchkiss  and also has a coastal home in Cheraw  where he enjoys spending time. He is fully independent with activities of daily living and self care. Due to pain symptoms he has stopped driving and his wife manages finances/ IADLs.
+Financial Status and Benefits: He is retired, no specific financial concerns brought forward during today's visit and no specific mention of financial barriers to health care services
+Insurance Coverage: Newcomer has full health insurance coverage with his Medicare Part A &amp; B coverage and Blue Cross PPO as secondary coverage. He notes that for all back injury related care he must receive approval through workman's comp for these health care services.||| Years of education: Not on file
+ Highest education level: Not on file","Based on the patient records provided, the current social determinants of health risks for the patients mentioned are:
+
+1. **Mr. Burnell Norris**:
+   - No specific social determinants of health risks mentioned.
+
+2. **Mr. Myah Roger**:
+   - Moderate alcohol use.
+   - Marital conflicts.
+   - Mild anxi",29,0.0
+127297833.xml,summarize the anti-lipemic medications this patient has tried,0.039727582292849,"Hypertension, benign  Mixed hyperlipidemia  Doing well off his meds, he can't tolerate statins and didn't tolerate the niacin so will leave off therapy.
+Old MI (myocardial infarction)  Stable on ASA, beta blockers and can't tolerate statins.","Based on the patient records summarized, the patient has tried the following anti-lipemic medications:
+
+1. **Statins**: Atorvastatin, Simvastatin (specific dose not mentioned)
+2. **Niacin**: Niaspan
+3. **Ezetimibe**: Zetia (10 mg oral tablet)
+4. **Coenzyme Q10**
+5. **Finasteride**: PROSCAR (5 mg dai",25,0.0
+127567043.xml,Please summarize this patient's last abdominal CT report.,0.6670146137787056,CT of the abdomen and pelvis was performed without IV or oral,"Based on the patient records provided, the last abdominal CT report did not mention any significant findings or abnormalities. The reports consistently indicate that the scan was normal and did not detect any specific issues in the abdomen. Some reports note additional findings such as benign calcif",30,0.0
+126394715.xml,Does this radiology report contain a new diagnosis of cancer?,0.8552631578947368,"<note type=""procedure note"" start=""02/06/2023 06:54 AM"">FULL RESULT: Examination: MRI ABDOMEN &amp; PELVIS W AND WO CONTRAST, 02/05/2023 Clinical History: mRCC Indication: mRCC Comparison: CT 12/01/2022 Technique: MRI of the abdomen with and without intravenous contrast. MRI of the pelvis with and without intravenous contrast. Findings:","No, the radiology report does not contain a new diagnosis of cancer.",12,0.0
+126637006.xml,Should prostate cancer screening be considered for this patient?,0.6336325966850829,"""Has family hx of prostate CA (father, diagnosed age 64). Patient's father is s/p surgery and doing well in his 80s. Patient got his own PSA drawn and has been a little high, over 3. Also spiked twice. Had a biopsy 2008 and it was normal. Spiked again last year. Had an MRI and was negative/normal.""","endoscopic findings, there is no specific indication for prostate cancer screening based on these clinical notes.
+The patient has a history of essential hypertension, a family history of disorder, and a history of a malignant tumor of lymphoid, hemopoietic, and related tissue. There is no specific i",85,0.0
+126630417.xml,Would this patient benefit from any interventions to address social determinants of health?,0.91995841995842,He described strong social support from his supportive wife (married 59 years),"Based on the patient record summaries provided, Mr. Norris would potentially benefit from interventions to address social determinants of health. Specifically, given his history of progressive memory decline and the possibility of medication-related cognitive issues, interventions such as assistance",29,0.0
+125513857.xml,Could this patient's symptoms be attributed to a side effect of one of their current medications?,0.0557801131770412,This raises concern in light of known kidney stone side effect secondary to Topamax use.,"Based on the patient record summaries provided, it is possible that the patient's symptoms could be attributed to side effects of their current medications. Several records mention symptoms that could be related to specific medications:
+
+1. **Topamax (Topiramate)**: Recurrence of severe migraines af",39,1.0
+128065252.xml,Is any additional testing or screening recommended for this patient due to an elevated cancer risk?,0.1101973684210526,"Female, 45 years old, with family history of breast  cancer (maternal grandmother, age 60; maternal aunt, age 80), with an  incompletely evaluated asymmetry in the right breast seen on  screening mammogram dated 01/07/2017","Based on the patient record summaries provided, additional testing or screening is recommended for some patients due to an elevated cancer risk, while others have no specific recommendations for additional testing or screening beyond routine guidelines. Here are the key points:
+
+1. **Recommended Add",19,0.0
+128478486.xml,Summarize the patient's care team including primary care and specialist providers and the conditions,0.5070943861813695,"Wood Haven Grayson Klas, MD, PhD","The patient's care team includes both a primary care provider and several specialists to manage various health conditions:
+
+1. **Primary Care Provider**: Manages overall health, including:
+   - General health maintenance
+   - Fertility concerns
+   - Conditions like polycystic ovarian syndrome (PCOS)",45,0.0
+128065252.xml,Does this patient have any significant family history mentioned in their chart that could prompt add,0.1101973684210526,"""Female, 45 years old, with family history of breast  cancer (maternal grandmother, age 60; maternal aunt, age 80)""","Yes, the patient has significant family history mentioned in their chart that could prompt additional testing and/or screening. Specifically, the patient has a family history of breast cancer on both sides of the family, which includes a paternal grandmother diagnosed with breast cancer at age 80 an",19,0.0
+127116955.xml,Identify the tests and screening interval recommended for this patient for breast cancer screening?,0.0322164948453608,"IMPRESSION/PLAN: 38 Y female with grade 2 IDC of the left breast stage I, T1c N0 M0, ER/PR positive, and HER2 negative.
+1. Breast cancer: Oncotype DX score of 26. She is status post lumpectomy and sentinel lymph node biopsy followed by whole breast XRT and has been on tamoxifen since 04/10/2012. Declined chemotherapy. Continues to tolerate tamoxifen reasonably well. She has no clinical evidence of recurrence on exam.  Will do bilateral mammogram at VRI in November.","earlier. The recommended screening interval is every 1-2 years, depending on individual risk factors and clinical guidance.
+The patient is a 47-year-old female with a history of breast cancer and is currently on anastrozole. The recommended screening interval for breast cancer is a mammogram due in ",68,0.0
+127116955.xml,What cervical cancer screening testing and interval is recommended for this patient?,0.636168384879725,"""Screening for cervical cancer  Pelvic exam normal , Pap done.
+Followup:  Return in about 1 year</note>""",", about 10 years prior to her own age.
+For this patient, cervical cancer screening should follow the general guidelines for women with a history of breast cancer, which typically involve a Pap smear every 3 years or a combination of a Pap smear and HPV test every 5 years. No specific interval for ce",68,0.0
+128035286.xml,Has this patient been hospitalized previously? If so what were the reasons for hospitalization and p,0.1976284584980237,"<note type=""emergency department note"" start=""03/22/2020 09:55"">For fist time, she dyed here hair at home, developed rash to R axilla, took pepcid/benadryl/Albuterol with no effect. Presents to Lueck with hoarse voice, no angio edema, hx of anaphylactic reaction.
+HPI  Solana Ziaee is a 53 Y female with history of anaphylaxis otherwise healthy who is presenting with swelling in her throat, difficulty breathing, chest pain, and rash after dying her hair at home.  Patient states that she dyed her hair around symptoms couple hours later.  Symptoms started with a rash under her axilla and progressed to difficulty breathing and feeling of swelling in her throat.  Patient states that she has medications for anaphylaxis, did not give epi because she felt like this was not as severe as last episode, however took Hohenwald , Benadryl, albuterol with no relief.  Patient states that her symptoms are getting worse, her voice started to get worse so decided to come to the ED for further work-up and management.  Patient denies nausea, vomiting, diarrhea.","Yes, the patient has been hospitalized previously. Here are the details:
+
+1. **March 22, 2020**: Hospitalized due to an allergic reaction (anaphylaxis) after dying her hair at home. Symptoms included a rash, difficulty breathing, and a hoarse voice. Treated with epinephrine, prednisone, and other me",8,0.0
+128065252.xml,Is this patient at elevated risk for osteoporosis?,0.0148026315789473,"""Gender: FEMALE""","Based on the patient records provided, the patient is not explicitly stated to be at an elevated risk for osteoporosis. Several records mention a family history of breast cancer and other cancers, which can be associated with increased risk factors for osteoporosis, but none clearly indicate an elev",19,0.0
+125582204.xml,Are there any contraindications to use of NSAIDs for this patient?,0.6004464285714286,"Please continue to avoid ANY alcohol and any NSAIDs including ibuprofen, aspirin, motrin, aleve, etc","Based on the patient records summarized, there are several instances where contraindications to the use of NSAIDs are mentioned. Specifically:
+
+- A history of cerebral hemorrhage and alcoholic cirrhosis (multiple records).
+- Known allergy to aspirin (multiple records).
+- Use of clopidogrel (Plavix),",40,1.0
+128309987.xml,Summarize the upcoming visits for this patient in the next 6 months and the purpose of each of these,0.9757023538344722,We will see the patient back in 6-8 weeks,"Based on the patient records provided, here is a summary of the upcoming visits for the patient in the next 6 months and the purpose of each visit:
+
+1. **January 8, 2023**: Post-operative follow-up for left total knee arthroplasty. Monitor recovery, assess joint function, and manage pain and rehabil",37,0.0
+124724147.xml,"Check this long CT report for inconsistencies, e.g. check if the reported sides (left vs. right) are",0.0942528735632183,"<note type=""procedure note"" start=""08/01/2015 16:38"">FINAL REPORT PROCEDURE: CT CALCIUM SCORING* INDICATIONS: Atherosclerosis, screening for calcifications. High-resolution, ECG synchronized Computed Tomography of the heart with  attention to the coronary arteries was performed using Siemens HeartView  CT.","To check for inconsistencies in the reported sides (left vs. right) between the report text and the impression, I will summarize the relevant findings:
+
+1. **Right Breast Involvement:**
+   - Ductal carcinoma in situ and mucinous carcinoma (Yides Jung)
+   - ADH of the right breast (CT report)
+
+2. **L",39,0.0

@@ -21,8 +21,8 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from sklearn.model_selection import train_test_split
-import matplotlib.pyplot as plt
-import matplotlib.ticker as mtick
+# matplotlib imported lazily inside plot_qccs_improvement() to avoid
+# ModuleNotFoundError in Modal GPU containers that don't install it.
 
 # ── Paths ──────────────────────────────────────────────────────────────────
 BASE    = Path("/Users/sanjaybasu/waymark-local/data/medalign/MedAlign_files")
@@ -325,6 +325,8 @@ def evaluate_qccs_effect(df_test: pd.DataFrame,
 
 def plot_qccs_improvement(df: pd.DataFrame, out_path: Path):
     """Figure 3: baseline vs QCCS accuracy by position quintile."""
+    import matplotlib.pyplot as plt
+    import matplotlib.ticker as mtick
     df = df.copy()
     df["quintile"] = pd.cut(df["position"], bins=5,
                             labels=["0–20%","20–40%","40–60%","60–80%","80–100%"])

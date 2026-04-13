@@ -29,7 +29,7 @@ data_vol    = modal.Volume.from_name("clinical-litm-data",    create_if_missing=
 
 # Base image — experiment scripts baked in via add_local_dir (Modal 1.3.5+)
 base_image = (
-    modal.Image.debian_slim(python_version="3.11")
+    modal.Image.debian_slim(python_version="3.12")
     .pip_install([
         "torch==2.3.0", "pandas", "numpy", "scikit-learn",
         "matplotlib", "pyarrow", "transformers==4.41.0",
@@ -109,6 +109,104 @@ def run_exp2_all():
         print(f"\n{task}: {res}")
 
 
+# ── Experiment 2b: QCCS-Gated Differential Transformer (Eq. 3) on EHRSHOT ────
+
+@app.function(
+    gpu="A10G",
+    timeout=7200,
+    memory=32768,
+    image=base_image,
+    volumes={"/results": results_vol, "/mnt-data": data_vol},
+)
+def run_exp2b_task(task: str, epochs: int = 40):
+    """Run Exp 2b QCCS-DiffAttn (Eq. 3) for one EHRSHOT lab task on GPU."""
+    import sys
+    sys.path.insert(0, "/experiments")
+    import exp2_ehrshot_diffattn as _exp2
+    import exp2_qccs_diffattn as exp2b
+    from pathlib import Path as _Path
+
+    # Override data paths to use Modal volume
+    _exp2.MEDS_BASE   = _Path("/mnt-data/ehrshot/EHRSHOT_files/EHRSHOT_MEDS")
+    _exp2.ASSETS_BASE = _Path("/mnt-data/ehrshot/EHRSHOT_files/EHRSHOT_ASSETS")
+    exp2b.MEDS_BASE   = _Path("/mnt-data/ehrshot/EHRSHOT_files/EHRSHOT_MEDS")
+    exp2b.ASSETS_BASE = _Path("/mnt-data/ehrshot/EHRSHOT_files/EHRSHOT_ASSETS")
+    exp2b.OUT_DIR     = _Path("/results")
+
+    import json
+    from pathlib import Path as _Path
+
+    task_def = exp2b.LAB_TASKS[task]
+    result = exp2b.run_task(task, task_def)
+    # Persist result to volume so it survives local client disconnect
+    if result:
+        out = _Path("/results") / f"exp2b_{task}.json"
+        out.write_text(json.dumps(result))
+    results_vol.commit()
+    return result
+
+
+@app.local_entrypoint()
+def run_exp2b_all():
+    """Run all 4 QCCS-DiffAttn tasks in parallel on A10G; save to /results/exp2_qccs_diffattn_results.csv."""
+    import pandas as pd
+    from exp2_qccs_diffattn import LAB_TASKS
+    tasks = list(LAB_TASKS.keys())
+    print(f"Launching {len(tasks)} QCCS-DiffAttn tasks in parallel: {tasks}")
+
+    results = list(run_exp2b_task.starmap([(t, 40) for t in tasks]))
+    rows = [r for r in results if r]
+    df = pd.DataFrame(rows)
+    out = LOCAL_ROOT / "notebooks" / "inhibitory-attention-ehr" / "figures" / "exp2_qccs_diffattn_results.csv"
+    df.to_csv(out, index=False)
+    print(f"\nSaved {len(df)} rows to {out}")
+    print(df.to_string(index=False))
+
+
+@app.local_entrypoint()
+def spawn_exp2b_all():
+    """Spawn all 4 QCCS-DiffAttn tasks fire-and-forget; each writes to Modal volume.
+    Run collect_exp2b_results when done to download CSV.
+    Use this when run_exp2b_all's local client keeps disconnecting."""
+    from exp2_qccs_diffattn import LAB_TASKS
+    tasks = list(LAB_TASKS.keys())
+    print(f"Spawning {len(tasks)} QCCS-DiffAttn tasks (fire-and-forget)...")
+    for task in tasks:
+        handle = run_exp2b_task.spawn(task, 40)
+        print(f"  Spawned {task}: {handle.object_id}")
+    print("All tasks spawned. Run collect_exp2b_results when complete.")
+
+
+@app.local_entrypoint()
+def collect_exp2b_results():
+    """Download exp2b_{task}.json from Modal volume and write local CSV.
+    Use when run_exp2b_all's local client disconnected before writing the CSV."""
+    import json
+    import pandas as pd
+    from exp2_qccs_diffattn import LAB_TASKS
+
+    rows = []
+    for task in LAB_TASKS:
+        path = f"exp2b_{task}.json"
+        try:
+            raw = results_vol.read_file(path)
+            if not isinstance(raw, (bytes, str)):
+                raw = b"".join(raw)
+            result = json.loads(raw)
+            rows.append(result)
+            print(f"  Loaded {path}: {result}")
+        except Exception as e:
+            print(f"  Missing {path}: {e}")
+    if not rows:
+        print("No results found in volume.")
+        return
+    df = pd.DataFrame(rows)
+    out = LOCAL_ROOT / "notebooks" / "inhibitory-attention-ehr" / "figures" / "exp2_qccs_diffattn_results.csv"
+    df.to_csv(out, index=False)
+    print(f"\nSaved {len(df)} rows to {out}")
+    print(df.to_string(index=False))
+
+
 # ── Experiment 3 v2: Qwen2.5-7B LLM inference — 3-arm (Full / QCCS / BM25) ───
 #
 # KEY FIXES vs original:
@@ -120,7 +218,7 @@ def run_exp2_all():
 LOCAL_FIGURES = Path("/Users/sanjaybasu/waymark-local/notebooks/inhibitory-attention-ehr/figures")
 
 llm_image = (
-    modal.Image.debian_slim(python_version="3.11")
+    modal.Image.debian_slim(python_version="3.12")
     .pip_install([
         "torch==2.3.0", "transformers==4.41.0", "accelerate",
         "bitsandbytes", "pandas", "numpy", "sentencepiece",
@@ -380,7 +478,7 @@ def run_llm_v2_entrypoint():
 # (bm25_filtered) and that semantic retrieval bridges recall–accuracy gap (dense).
 
 llm_image_v3 = (
-    modal.Image.debian_slim(python_version="3.11")
+    modal.Image.debian_slim(python_version="3.12")
     .pip_install([
         "torch==2.3.0", "transformers==4.41.0", "accelerate",
         "bitsandbytes", "pandas", "numpy", "sentencepiece",
@@ -674,3 +772,919 @@ def run_llm_v3_entrypoint():
     print("Download when done:")
     print(f"  modal volume get clinical-litm-results exp3_v3_llm_results.csv "
           f"{OUT_D}/exp3_v3_llm_results.csv")
+
+
+# ── Experiment 3 v4: 6-arm (adds Cross-Encoder reranking arm) ────────────────
+#
+# Adds CE arm: BM25 top-50 → cross-encoder/ms-marco-MiniLM-L-6-v2 → top-20
+# This directly addresses reviewer request for "BM25+cross-encoder reranking".
+
+llm_image_v4 = (
+    modal.Image.debian_slim(python_version="3.12")
+    .pip_install([
+        "torch==2.3.0", "transformers==4.41.0", "accelerate",
+        "bitsandbytes", "pandas", "numpy", "sentencepiece",
+        "pyarrow", "rank-bm25", "scikit-learn", "matplotlib",
+        "sentence-transformers",
+    ])
+    .add_local_dir(str(EXPERIMENTS_DIR), remote_path="/experiments")
+    .add_local_file(str(LOCAL_FIGURES / "qccs_gate.pt"), remote_path="/gate/qccs_gate.pt")
+)
+
+
+@app.function(
+    gpu="A100",
+    timeout=18000,   # 5 hours — 6 arms × 83 records
+    memory=80000,
+    image=llm_image_v4,
+    volumes={"/results": results_vol, "/mnt-data": data_vol},
+)
+def run_llm_inference_v4(records: list[dict],
+                          model_id: str = "Qwen/Qwen2.5-7B-Instruct",
+                          keep_top_k: int = 20,
+                          ce_first_k: int = 50) -> list[dict]:
+    """
+    Six-arm LLM evaluation (extends v3 with cross-encoder reranking arm).
+
+    Arms:
+      baseline      — full chronological EHR, truncated at 16k tokens
+      qccs          — top-k sentences by learned gate + 5 most-recent events
+      bm25          — top-k by BM25 score + 5 most-recent events
+      bm25_filtered — BM25 after filtering section-header false positives
+      dense         — top-k by sentence-transformer cosine similarity + 5 most-recent
+      ce            — BM25 top-{ce_first_k} → cross-encoder rerank → top-k
+
+    Output: /results/exp3_v4_llm_results.csv
+    """
+    import os, re, sys, torch
+    import numpy as np
+    import pandas as pd
+    from pathlib import Path as _Path
+    from transformers import AutoTokenizer, AutoModelForCausalLM
+    from rank_bm25 import BM25Okapi
+    from sentence_transformers import SentenceTransformer, CrossEncoder
+
+    sys.path.insert(0, "/experiments")
+    from exp3_qccs_gate import (parse_ehr_sentences, sentences_to_context,
+                                 qccs_compress, QCCSGate, CharNgramTokenizer)
+
+    EHR_DIR = _Path("/mnt-data/medalign/MedAlign_files/medalign_instructions_v1_3/ehrs")
+
+    _HEADER_PATS = [
+        re.compile(r'^\s*question\s*[:\d]', re.I),
+        re.compile(r'^\s*answer\s*[:\d]', re.I),
+        re.compile(r'^\s*counseling\s*[:\d]', re.I),
+        re.compile(r'^\s*follow.?up\s*[:\d]', re.I),
+        re.compile(r'^\s*review\s+of\s+systems?\s*[:\d]?', re.I),
+        re.compile(r'^\s*chief\s+complaint\s*[:\d]?', re.I),
+        re.compile(r'^\s*assessment\s*[:\d]', re.I),
+        re.compile(r'^\s*plan\s*[:\d]', re.I),
+        re.compile(r'^\s*subjective\s*[:\d]?', re.I),
+        re.compile(r'^\s*objective\s*[:\d]?', re.I),
+        re.compile(r'^\s*disposition\s*[:\d]?', re.I),
+    ]
+
+    def _is_header(text: str) -> bool:
+        t = text.strip()
+        if len(t) < 5:
+            return True
+        for pat in _HEADER_PATS:
+            if pat.match(t):
+                return True
+        if len(t) <= 40 and t.upper() == t and re.match(r'^[A-Z\\s/:-]+$', t):
+            return True
+        return False
+
+    gate = QCCSGate()
+    state = torch.load("/gate/qccs_gate.pt", map_location="cpu", weights_only=False)
+    if isinstance(state, dict) and "state_dict" in state:
+        gate.load_state_dict(state["state_dict"])
+    else:
+        gate.load_state_dict(state)
+    gate.eval()
+    tok_fn = CharNgramTokenizer()
+
+    print("Loading sentence encoder (all-MiniLM-L6-v2)...")
+    encoder = SentenceTransformer("all-MiniLM-L6-v2")
+    print("Loading cross-encoder (ms-marco-MiniLM-L-6-v2)...")
+    ce_model = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2", max_length=512)
+
+    print(f"Loading {model_id} on GPU...")
+    hf_token = os.environ.get("HF_TOKEN")
+    llm_tok = AutoTokenizer.from_pretrained(model_id, token=hf_token)
+    model = AutoModelForCausalLM.from_pretrained(
+        model_id, device_map="auto", torch_dtype=torch.float16, token=hf_token,
+    )
+    model.eval()
+    print(f"Model loaded. Processing {len(records)} records (6 arms each)...")
+
+    def build_prompt(context: str, question: str) -> str:
+        return (f"<|im_start|>system\nYou are a clinical assistant.<|im_end|>\n"
+                f"<|im_start|>user\nBased ONLY on the patient record below, "
+                f"answer the question briefly.\n\nPATIENT RECORD:\n"
+                f"{context}\n\nQUESTION: {question}<|im_end|>\n"
+                f"<|im_start|>assistant\n")
+
+    def generate(context: str, question: str,
+                 max_new_tokens: int = 128, ctx_token_limit: int = 32768) -> str:
+        prompt = build_prompt(context, question)
+        inputs = llm_tok(prompt, return_tensors="pt",
+                         truncation=True, max_length=ctx_token_limit).to(model.device)
+        with torch.no_grad():
+            out = model.generate(**inputs, max_new_tokens=max_new_tokens,
+                                 do_sample=False, temperature=1.0)
+        return llm_tok.decode(out[0][inputs["input_ids"].shape[1]:],
+                              skip_special_tokens=True).strip()
+
+    def score_response(response: str, expected: str) -> float:
+        r, e = response.lower(), expected.lower()
+        if e in r:
+            return 1.0
+        toks_e = set(re.findall(r'\w+', e))
+        toks_r = set(re.findall(r'\w+', r))
+        if toks_e and len(toks_e & toks_r) / len(toks_e) >= 0.5:
+            return 0.5
+        return 0.0
+
+    xml_cache: dict = {}
+
+    def get_events(fname: str) -> list[dict]:
+        if fname not in xml_cache:
+            xml_path = EHR_DIR / fname
+            xml_cache[fname] = parse_ehr_sentences(xml_path) if xml_path.exists() else []
+        return xml_cache[fname]
+
+    def _bm25_compress_inner(events, query, keep_top_k, filter_headers):
+        ev = ([e for e in events if not _is_header(e["text"])]
+              if filter_headers else events)
+        if not ev:
+            ev = events
+        recent_idx_set = {e["idx"] for e in events[-5:]}
+        corpus = [re.findall(r'\w+', e["text"].lower()) for e in ev]
+        bm25_idx = BM25Okapi(corpus) if any(corpus) else None
+        if bm25_idx is None:
+            kept = list(events[-keep_top_k:])
+        else:
+            q_toks = re.findall(r'\w+', query.lower())
+            scores = bm25_idx.get_scores(q_toks) if q_toks else [0.0] * len(ev)
+            scored = sorted(range(len(scores)), key=lambda i: -scores[i])
+            keep_pos = set(scored[:keep_top_k])
+            kept = [ev[i] for i in range(len(ev)) if i in keep_pos]
+            for e in events:
+                if e["idx"] in recent_idx_set and e not in kept:
+                    kept.append(e)
+        kept.sort(key=lambda e: e["timestamp"])
+        return sentences_to_context(kept)
+
+    def dense_compress(events, query, keep_top_k):
+        texts = [e["text"] for e in events]
+        q_emb   = encoder.encode([query], normalize_embeddings=True)
+        ev_embs = encoder.encode(texts, normalize_embeddings=True, batch_size=128)
+        sims    = (ev_embs @ q_emb.T).ravel()
+        recent_idx_set = {e["idx"] for e in events[-5:]}
+        top_pos = set(int(i) for i in np.argsort(sims)[-keep_top_k:])
+        top_pos |= {i for i, e in enumerate(events) if e["idx"] in recent_idx_set}
+        kept = [events[i] for i in range(len(events)) if i in top_pos]
+        kept.sort(key=lambda e: e["timestamp"])
+        return sentences_to_context(kept)
+
+    def ce_compress(events, query, keep_top_k, first_k):
+        """BM25 top-first_k → cross-encoder rerank → keep_top_k."""
+        recent_idx_set = {e["idx"] for e in events[-5:]}
+        corpus = [re.findall(r'\w+', e["text"].lower()) for e in events]
+        bm25_idx = BM25Okapi(corpus) if any(corpus) else None
+        if bm25_idx is None:
+            return sentences_to_context(events[-keep_top_k:])
+        q_toks = re.findall(r'\w+', query.lower())
+        scores = bm25_idx.get_scores(q_toks) if q_toks else [0.0] * len(events)
+        top_bm25 = sorted(range(len(scores)), key=lambda i: -scores[i])[:first_k]
+        pairs = [(query, events[i]["text"]) for i in top_bm25]
+        ce_scores = ce_model.predict(pairs, show_progress_bar=False)
+        ranked = sorted(zip(ce_scores, top_bm25), key=lambda x: -x[0])
+        top_pos = {i for _, i in ranked[:keep_top_k]}
+        top_pos |= {i for i, e in enumerate(events) if e["idx"] in recent_idx_set}
+        kept = [events[i] for i in range(len(events)) if i in top_pos]
+        kept.sort(key=lambda e: e["timestamp"])
+        return sentences_to_context(kept)
+
+    _partial = _Path("/results/exp3_v4_llm_results.csv")
+    if _partial.exists():
+        existing = pd.read_csv(_partial)
+        results = existing.to_dict("records")
+        print(f"  Loaded {len(results)} existing rows from partial run")
+    else:
+        results = []
+
+    for i, rec in enumerate(records):
+        if (i + 1) % 10 == 0:
+            print(f"  {i+1}/{len(records)}")
+
+        fname   = rec["filename"]
+        events  = get_events(fname)
+        if not events:
+            continue
+
+        question = rec["question"]
+        expected = rec.get("expected", "")
+
+        try:
+            ctx_full  = sentences_to_context(events, max_chars=400000)
+            ctx_qccs, _ = qccs_compress(events, question, gate, tok_fn,
+                                         keep_top_k=keep_top_k)
+            ctx_bm25  = _bm25_compress_inner(events, question, keep_top_k, False)
+            ctx_bm25f = _bm25_compress_inner(events, question, keep_top_k, True)
+            ctx_dense = dense_compress(events, question, keep_top_k)
+            ctx_ce    = ce_compress(events, question, keep_top_k, ce_first_k)
+
+            bl_resp    = generate(ctx_full,  question, ctx_token_limit=16384)
+            qccs_resp  = generate(ctx_qccs,  question, ctx_token_limit=4096)
+            bm25_resp  = generate(ctx_bm25,  question, ctx_token_limit=4096)
+            bm25f_resp = generate(ctx_bm25f, question, ctx_token_limit=4096)
+            dns_resp   = generate(ctx_dense, question, ctx_token_limit=4096)
+            ce_resp    = generate(ctx_ce,    question, ctx_token_limit=4096)
+        except Exception as exc:
+            print(f"  [ERROR] record {i} ({fname}): {exc} — skipping")
+            bl_resp = qccs_resp = bm25_resp = bm25f_resp = dns_resp = ce_resp = ""
+
+        results.append({
+            "filename":               fname,
+            "question":               question[:100],
+            "position":               rec.get("position", float("nan")),
+            "baseline_correct":       score_response(bl_resp,    expected),
+            "qccs_correct":           score_response(qccs_resp,  expected),
+            "bm25_correct":           score_response(bm25_resp,  expected),
+            "bm25_filtered_correct":  score_response(bm25f_resp, expected),
+            "dense_correct":          score_response(dns_resp,   expected),
+            "ce_correct":             score_response(ce_resp,    expected),
+            "baseline_response":      bl_resp[:200],
+            "qccs_response":          qccs_resp[:200],
+            "bm25_response":          bm25_resp[:200],
+            "bm25_filtered_response": bm25f_resp[:200],
+            "dense_response":         dns_resp[:200],
+            "ce_response":            ce_resp[:200],
+        })
+
+        if len(results) % 10 == 0:
+            pd.DataFrame(results).to_csv("/results/exp3_v4_llm_results.csv", index=False)
+            results_vol.commit()
+            print(f"  [checkpoint] {len(results)} rows saved")
+
+    pd.DataFrame(results).to_csv("/results/exp3_v4_llm_results.csv", index=False)
+    results_vol.commit()
+    print(f"Saved {len(results)} rows to /results/exp3_v4_llm_results.csv")
+    return results
+
+
+@app.local_entrypoint()
+def run_llm_v4_entrypoint():
+    """
+    Six-arm LLM evaluation: Full / QCCS / BM25 / BM25-filtered / Dense / CE.
+
+    Run: modal run modal_app.py::run_llm_v4_entrypoint
+    Download: modal volume get clinical-litm-results exp3_v4_llm_results.csv <local_path>
+    """
+    import pandas as pd
+    from sklearn.model_selection import train_test_split
+
+    BASE  = LOCAL_ROOT / "data" / "medalign" / "MedAlign_files"
+    TSV   = BASE / "medalign_instructions_v1_3" / "clinician-reviewed-model-responses.tsv"
+    OUT_D = LOCAL_FIGURES
+
+    df = pd.read_csv(TSV, sep="\t").dropna(subset=["question", "evidence", "filename"])
+    patients = df["filename"].unique()
+    _, test_patients = train_test_split(patients, test_size=0.30, random_state=42)
+    df_test = (df[df["filename"].isin(set(test_patients))]
+               .drop_duplicates(subset=["filename", "question"]))
+    print(f"Test split: {len(test_patients)} patients, {len(df_test)} unique instructions")
+
+    pos_df = pd.read_csv(OUT_D / "exp1_litm_results.csv")
+
+    partial_path = OUT_D / "exp3_v4_llm_results.csv"
+    done_keys: set = set()
+    if partial_path.exists():
+        done_df = pd.read_csv(partial_path)
+        done_keys = set(zip(done_df["filename"].astype(str),
+                            done_df["question"].astype(str).str[:100]))
+        print(f"Resuming: {len(done_keys)} records already done")
+
+    records = []
+    for _, row in df_test.iterrows():
+        fname    = str(row["filename"])
+        question = str(row["question"])
+        if (fname, question[:100]) in done_keys:
+            continue
+        expected = str(row.get("evidence", "")).strip()
+        pos_row  = pos_df[(pos_df["filename"] == fname) &
+                          (pos_df["question"]  == question)]
+        pos = float(pos_row["position"].iloc[0]) if len(pos_row) > 0 else float("nan")
+        records.append({"filename": fname, "question": question,
+                        "expected": expected, "position": pos})
+
+    print(f"Running {len(records)} records (6 arms × {len(records)} = "
+          f"{len(records)*6} LLM calls) on A100...")
+    result = run_llm_inference_v4.remote(records)
+    # download result from volume to local figures
+    df_out = pd.DataFrame(result)
+    out_path = OUT_D / "exp3_v4_llm_results.csv"
+    df_out.to_csv(out_path, index=False)
+    print(f"Saved {len(df_out)} rows to {out_path}")
+
+
+# ── Experiment 3 Oracle Control: Qwen on isolated gold-sentence context ────────
+#
+# Runs Qwen2.5-7B-Instruct on the oracle context: [gold sentence + last-5 events].
+# Pre-built oracle contexts are in exp3_oracle_contexts.csv (uploaded to Modal volume).
+# This tests whether the reader CAN produce the correct answer when given unambiguous
+# evidence, establishing an upper bound on context-quality effects.
+#
+# Run: modal run modal_app.py::run_oracle_inference
+
+llm_image_oracle = (
+    modal.Image.debian_slim(python_version="3.12")
+    .pip_install([
+        "torch==2.3.0", "transformers==4.41.0", "accelerate",
+        "bitsandbytes", "pandas", "numpy", "sentencepiece",
+    ])
+    .add_local_dir(str(EXPERIMENTS_DIR), remote_path="/experiments")
+)
+
+
+@app.function(
+    gpu="A100",
+    timeout=3600,   # 1 hour — 83 short oracle contexts
+    memory=80000,
+    image=llm_image_oracle,
+    volumes={"/results": results_vol, "/mnt-data": data_vol},
+)
+def run_oracle_inference_fn() -> list[dict]:
+    """
+    Run Qwen2.5-7B-Instruct on oracle contexts (gold sentence + 5 recency).
+    Reads exp3_oracle_contexts.csv from volume, writes exp3_oracle_inference.csv.
+    """
+    import os, torch, pandas as pd
+    from pathlib import Path as _Path
+    from transformers import AutoTokenizer, AutoModelForCausalLM
+
+    # Oracle contexts CSV must be uploaded to volume before running
+    ctx_csv = _Path("/mnt-data/exp3_oracle_contexts.csv")
+    if not ctx_csv.exists():
+        # Fall back to results volume
+        ctx_csv = _Path("/results/exp3_oracle_contexts.csv")
+    df = pd.read_csv(str(ctx_csv))
+    print(f"Loaded {len(df)} oracle contexts ({df['has_gold'].sum()} with gold sentence)")
+
+    model_id = "Qwen/Qwen2.5-7B-Instruct"
+    print(f"Loading {model_id}...")
+    hf_token = os.environ.get("HF_TOKEN")
+    llm_tok = AutoTokenizer.from_pretrained(model_id, token=hf_token)
+    model = AutoModelForCausalLM.from_pretrained(
+        model_id, device_map="auto", torch_dtype=torch.float16, token=hf_token,
+    )
+    model.eval()
+
+    def build_prompt(context: str, question: str) -> str:
+        return (f"<|im_start|>system\nYou are a clinical assistant.<|im_end|>\n"
+                f"<|im_start|>user\nBased ONLY on the patient record below, "
+                f"answer the question briefly.\n\nPATIENT RECORD:\n"
+                f"{context}\n\nQUESTION: {question}<|im_end|>\n"
+                f"<|im_start|>assistant\n")
+
+    def generate(context: str, question: str) -> str:
+        prompt = build_prompt(context, question)
+        inputs = llm_tok(prompt, return_tensors="pt",
+                         truncation=True, max_length=4096).to(model.device)
+        with torch.no_grad():
+            out = model.generate(**inputs, max_new_tokens=128,
+                                 do_sample=False, temperature=1.0)
+        return llm_tok.decode(out[0][inputs["input_ids"].shape[1]:],
+                              skip_special_tokens=True).strip()
+
+    results = []
+    for i, row in df.iterrows():
+        oracle_context = str(row.get("oracle_context", ""))
+        question       = str(row["question"])
+        if not oracle_context.strip():
+            resp = ""
+        else:
+            try:
+                resp = generate(oracle_context, question)
+            except Exception as e:
+                print(f"  [ERROR] row {i}: {e}")
+                resp = ""
+        results.append({
+            "filename":        row["filename"],
+            "question":        question[:100],
+            "evidence":        str(row["evidence"]),
+            "has_gold":        bool(row["has_gold"]),
+            "oracle_response": resp,
+        })
+        if (i + 1) % 10 == 0:
+            print(f"  {i+1}/{len(df)}")
+            pd.DataFrame(results).to_csv("/results/exp3_oracle_inference.csv", index=False)
+            results_vol.commit()
+
+    pd.DataFrame(results).to_csv("/results/exp3_oracle_inference.csv", index=False)
+    results_vol.commit()
+    print(f"Saved {len(results)} oracle responses to /results/exp3_oracle_inference.csv")
+    return results
+
+
+@app.local_entrypoint()
+def run_oracle_inference():
+    """
+    Upload oracle contexts CSV and spawn oracle inference on A100.
+
+    Run:   modal run modal_app.py::run_oracle_inference
+    Judge: python experiments/exp3_oracle_control.py --judge
+    Download: modal volume get clinical-litm-results exp3_oracle_inference.csv <local_path>
+    """
+    # Upload oracle contexts to data volume
+    oracle_csv = LOCAL_FIGURES / "exp3_oracle_contexts.csv"
+    print(f"Uploading {oracle_csv} to Modal data volume...")
+    with data_vol.batch_upload(force=True) as batch:
+        batch.put_file(str(oracle_csv), "exp3_oracle_contexts.csv")
+    print("Upload complete. Running oracle inference on A100 (blocking ~1 hr)...")
+    run_oracle_inference_fn.remote()
+    print("Oracle inference complete.")
+    print(f"Download: modal volume get clinical-litm-results exp3_oracle_inference.csv "
+          f"{LOCAL_FIGURES}/exp3_oracle_inference.csv")
+
+
+# ── BM25 k-sweep: end-to-end accuracy at k=1,3,5 ────────────────────────────
+#
+# Tests whether reducing k to increase context precision improves end-to-end
+# accuracy for BM25, addressing reviewer question: "does reducing k narrow
+# the gap to QCCS?"
+#
+# Run: modal run modal_app.py::run_bm25_k_sweep
+
+llm_image_ksweep = (
+    modal.Image.debian_slim(python_version="3.12")
+    .pip_install([
+        "torch==2.3.0", "transformers==4.41.0", "accelerate",
+        "bitsandbytes", "pandas", "numpy", "sentencepiece",
+        "pyarrow", "rank-bm25", "scikit-learn",
+    ])
+    .add_local_dir(str(EXPERIMENTS_DIR), remote_path="/experiments")
+)
+
+
+@app.function(
+    gpu="A100",
+    timeout=5400,   # 90 minutes — 3 k-values × 83 records
+    memory=80000,
+    image=llm_image_ksweep,
+    volumes={"/results": results_vol, "/mnt-data": data_vol},
+)
+def run_bm25_k_sweep_fn(records: list[dict],
+                        model_id: str = "Qwen/Qwen2.5-7B-Instruct") -> list[dict]:
+    """
+    Run BM25 at k=1, 3, 5 for all 83 instructions.
+    Tests whether high-precision, low-recall BM25 contexts help the reader.
+    """
+    import os, re, sys, torch
+    import pandas as pd
+    from pathlib import Path as _Path
+    from transformers import AutoTokenizer, AutoModelForCausalLM
+    from rank_bm25 import BM25Okapi
+
+    sys.path.insert(0, "/experiments")
+    from exp3_qccs_gate import (parse_ehr_sentences, sentences_to_context,
+                                 QCCSGate, CharNgramTokenizer)
+
+    EHR_DIR = _Path("/mnt-data/medalign/MedAlign_files/medalign_instructions_v1_3/ehrs")
+
+    print(f"Loading {model_id}...")
+    hf_token = os.environ.get("HF_TOKEN")
+    llm_tok = AutoTokenizer.from_pretrained(model_id, token=hf_token)
+    model = AutoModelForCausalLM.from_pretrained(
+        model_id, device_map="auto", torch_dtype=torch.float16, token=hf_token,
+    )
+    model.eval()
+
+    def build_prompt(context: str, question: str) -> str:
+        return (f"<|im_start|>system\nYou are a clinical assistant.<|im_end|>\n"
+                f"<|im_start|>user\nBased ONLY on the patient record below, "
+                f"answer the question briefly.\n\nPATIENT RECORD:\n"
+                f"{context}\n\nQUESTION: {question}<|im_end|>\n"
+                f"<|im_start|>assistant\n")
+
+    def generate(context: str, question: str) -> str:
+        prompt = build_prompt(context, question)
+        inputs = llm_tok(prompt, return_tensors="pt",
+                         truncation=True, max_length=4096).to(model.device)
+        with torch.no_grad():
+            out = model.generate(**inputs, max_new_tokens=128,
+                                 do_sample=False, temperature=1.0)
+        return llm_tok.decode(out[0][inputs["input_ids"].shape[1]:],
+                              skip_special_tokens=True).strip()
+
+    def bm25_compress(events: list[dict], query: str, k: int) -> str:
+        recent_idx_set = {e["idx"] for e in events[-5:]}
+        corpus = [re.findall(r'\w+', e["text"].lower()) for e in events]
+        bm25_idx = BM25Okapi(corpus) if any(corpus) else None
+        if bm25_idx is None:
+            return sentences_to_context(events[-k:])
+        q_toks = re.findall(r'\w+', query.lower())
+        scores = bm25_idx.get_scores(q_toks) if q_toks else [0.0] * len(events)
+        top_pos = set(sorted(range(len(scores)), key=lambda i: -scores[i])[:k])
+        kept = [events[i] for i in range(len(events))
+                if i in top_pos or events[i]["idx"] in recent_idx_set]
+        kept.sort(key=lambda e: e["timestamp"])
+        return sentences_to_context(kept)
+
+    xml_cache: dict = {}
+
+    def get_events(fname: str) -> list[dict]:
+        if fname not in xml_cache:
+            xml_path = EHR_DIR / fname
+            xml_cache[fname] = parse_ehr_sentences(xml_path) if xml_path.exists() else []
+        return xml_cache[fname]
+
+    _partial = _Path("/results/exp3_bm25_k_sweep.csv")
+    results = []
+    if _partial.exists():
+        existing = pd.read_csv(_partial)
+        results = existing.to_dict("records")
+        print(f"  Loaded {len(results)} existing rows")
+
+    K_VALUES = [1, 3, 5]
+    print(f"Running {len(records)} instructions × {len(K_VALUES)} k-values...")
+
+    for i, rec in enumerate(records):
+        if (i + 1) % 10 == 0:
+            print(f"  {i+1}/{len(records)}")
+        fname    = rec["filename"]
+        events   = get_events(fname)
+        if not events:
+            continue
+        question = rec["question"]
+        expected = rec.get("expected", "")
+        row = {
+            "filename": fname,
+            "question": question[:100],
+            "position": rec.get("position", float("nan")),
+            "evidence": expected,
+        }
+        for k in K_VALUES:
+            ctx = bm25_compress(events, question, k)
+            try:
+                resp = generate(ctx, question)
+            except Exception as e:
+                print(f"    [ERROR] k={k}: {e}")
+                resp = ""
+            row[f"bm25_k{k}_response"] = resp[:200]
+        results.append(row)
+        if len(results) % 10 == 0:
+            pd.DataFrame(results).to_csv("/results/exp3_bm25_k_sweep.csv", index=False)
+            results_vol.commit()
+
+    pd.DataFrame(results).to_csv("/results/exp3_bm25_k_sweep.csv", index=False)
+    results_vol.commit()
+    print(f"Saved {len(results)} rows to /results/exp3_bm25_k_sweep.csv")
+    return results
+
+
+@app.local_entrypoint()
+def run_bm25_k_sweep():
+    """
+    Run BM25 at k=1, 3, 5 end-to-end on A100.
+
+    Run:  modal run modal_app.py::run_bm25_k_sweep
+    Then judge: python experiments/exp3_judge_extras.py --ksweep
+    Download: modal volume get clinical-litm-results exp3_bm25_k_sweep.csv <local_path>
+    """
+    import pandas as pd
+    from sklearn.model_selection import train_test_split
+
+    BASE  = LOCAL_ROOT / "data" / "medalign" / "MedAlign_files"
+    TSV   = BASE / "medalign_instructions_v1_3" / "clinician-reviewed-model-responses.tsv"
+
+    df = pd.read_csv(TSV, sep="\t").dropna(subset=["question", "evidence", "filename"])
+    patients = df["filename"].unique()
+    _, test_patients = train_test_split(patients, test_size=0.30, random_state=42)
+    df_test = (df[df["filename"].isin(set(test_patients))]
+               .drop_duplicates(subset=["filename", "question"]))
+    pos_df = pd.read_csv(LOCAL_FIGURES / "exp1_litm_results.csv")
+
+    records = []
+    for _, row in df_test.iterrows():
+        fname    = str(row["filename"])
+        question = str(row["question"])
+        expected = str(row.get("evidence", "")).strip()
+        pos_row  = pos_df[(pos_df["filename"] == fname) &
+                          (pos_df["question"]  == question)]
+        pos = float(pos_row["position"].iloc[0]) if len(pos_row) > 0 else float("nan")
+        records.append({"filename": fname, "question": question,
+                        "expected": expected, "position": pos})
+
+    print(f"Dispatching {len(records)} records × 3 k-values to A100 (blocking ~90 min)...")
+    run_bm25_k_sweep_fn.remote(records)
+    print("BM25 k-sweep complete.")
+    print(f"Download: modal volume get clinical-litm-results exp3_bm25_k_sweep.csv "
+          f"{LOCAL_FIGURES}/exp3_bm25_k_sweep.csv")
+
+
+# ── Map-Reduce baseline: chunk-summarize-answer pipeline ─────────────────────
+#
+# Tests whether a two-pass map-reduce pipeline (chunk → summarize per chunk →
+# combine → answer) can outperform QCCS. If map-reduce achieves ~2-5% accuracy,
+# it confirms that compressive pipelines fail regardless of whether they include
+# the gold sentence — the same pattern as BM25/dense/CE.
+#
+# Run: modal run modal_app.py::run_mapreduce_baseline
+
+llm_image_mapreduce = (
+    modal.Image.debian_slim(python_version="3.12")
+    .pip_install([
+        "torch==2.3.0", "transformers==4.41.0", "accelerate",
+        "bitsandbytes", "pandas", "numpy", "sentencepiece",
+        "pyarrow", "scikit-learn",
+    ])
+    .add_local_dir(str(EXPERIMENTS_DIR), remote_path="/experiments")
+)
+
+
+@app.function(
+    gpu="A100",
+    timeout=21600,   # 6 hours — ~10 map calls + 1 reduce per instruction
+    memory=80000,
+    image=llm_image_mapreduce,
+    volumes={"/results": results_vol, "/mnt-data": data_vol},
+)
+def run_llm_inference_mapreduce(records: list[dict],
+                                 model_id: str = "Qwen/Qwen2.5-7B-Instruct",
+                                 chunk_size: int = 30) -> list[dict]:
+    """
+    Map-reduce context compression baseline.
+
+    Map phase:  split each patient's events into chunks of chunk_size events;
+                for each chunk, ask Qwen to summarize clinically relevant facts
+                relative to the question in 2-3 sentences.
+    Reduce phase: concatenate chunk summaries; ask Qwen to answer the question
+                  from the combined summary.
+
+    This is a legitimate alternative to selection-based context compression
+    that preserves semantic coverage without positional selection bias.
+    """
+    import os, sys, torch
+    import pandas as pd
+    from pathlib import Path as _Path
+    from transformers import AutoTokenizer, AutoModelForCausalLM
+
+    sys.path.insert(0, "/experiments")
+    from exp3_qccs_gate import parse_ehr_sentences, sentences_to_context
+
+    EHR_DIR = _Path("/mnt-data/medalign/MedAlign_files/medalign_instructions_v1_3/ehrs")
+
+    print(f"Loading {model_id}...")
+    hf_token = os.environ.get("HF_TOKEN")
+    llm_tok = AutoTokenizer.from_pretrained(model_id, token=hf_token)
+    model = AutoModelForCausalLM.from_pretrained(
+        model_id, device_map="auto", torch_dtype=torch.float16, token=hf_token,
+    )
+    model.eval()
+
+    def generate(prompt: str, max_tokens: int = 128) -> str:
+        inputs = llm_tok(prompt, return_tensors="pt",
+                         truncation=True, max_length=4096).to(model.device)
+        with torch.no_grad():
+            out = model.generate(**inputs, max_new_tokens=max_tokens,
+                                 do_sample=False, temperature=1.0)
+        return llm_tok.decode(out[0][inputs["input_ids"].shape[1]:],
+                              skip_special_tokens=True).strip()
+
+    def map_reduce_compress(events: list[dict], question: str,
+                             chunk_sz: int) -> str:
+        """Summarize each chunk, concatenate summaries for reduce phase."""
+        chunks = [events[i:i+chunk_sz] for i in range(0, len(events), chunk_sz)]
+        summaries = []
+        for chunk in chunks:
+            chunk_text = sentences_to_context(chunk, max_chars=8000)
+            if not chunk_text.strip():
+                continue
+            map_prompt = (
+                f"<|im_start|>system\nYou are a clinical assistant.<|im_end|>\n"
+                f"<|im_start|>user\nSummarize the following clinical notes in "
+                f"2-3 sentences, focusing only on facts relevant to this question: "
+                f"{question}\n\nNOTES:\n{chunk_text}<|im_end|>\n"
+                f"<|im_start|>assistant\n"
+            )
+            try:
+                summary = generate(map_prompt, max_tokens=80)
+                if summary.strip():
+                    summaries.append(summary)
+            except Exception:
+                pass
+        return "\n".join(summaries) if summaries else ""
+
+    xml_cache: dict = {}
+
+    def get_events(fname: str) -> list[dict]:
+        if fname not in xml_cache:
+            xml_path = EHR_DIR / fname
+            xml_cache[fname] = parse_ehr_sentences(xml_path) if xml_path.exists() else []
+        return xml_cache[fname]
+
+    _partial = _Path("/results/exp3_mapreduce_results.csv")
+    results = []
+    if _partial.exists():
+        existing = pd.read_csv(_partial)
+        results = existing.to_dict("records")
+        done_keys = set(zip(existing["filename"].astype(str),
+                           existing["question"].astype(str).str[:100]))
+        print(f"  Resuming: {len(results)} rows already done")
+    else:
+        done_keys = set()
+
+    total = len(records)
+    for i, rec in enumerate(records):
+        fname    = rec["filename"]
+        question = rec["question"]
+        if (fname, question[:100]) in done_keys:
+            continue
+        if (i + 1) % 5 == 0:
+            print(f"  {i+1}/{total}")
+        events = get_events(fname)
+        if not events:
+            continue
+        combined_summary = map_reduce_compress(events, question, chunk_size)
+        if not combined_summary.strip():
+            resp = ""
+        else:
+            reduce_prompt = (
+                f"<|im_start|>system\nYou are a clinical assistant.<|im_end|>\n"
+                f"<|im_start|>user\nBased ONLY on the patient record summaries below, "
+                f"answer the question briefly.\n\nPATIENT RECORD SUMMARIES:\n"
+                f"{combined_summary}\n\nQUESTION: {question}<|im_end|>\n"
+                f"<|im_start|>assistant\n"
+            )
+            try:
+                resp = generate(reduce_prompt, max_tokens=128)
+            except Exception as e:
+                print(f"  [reduce ERROR] {fname}: {e}")
+                resp = ""
+
+        results.append({
+            "filename":            fname,
+            "question":            question[:100],
+            "position":            rec.get("position", float("nan")),
+            "evidence":            rec.get("expected", ""),
+            "mapreduce_response":  resp[:300],
+            "n_chunks":            len([events[i:i+chunk_size]
+                                        for i in range(0, len(events), chunk_size)]),
+        })
+        if len(results) % 5 == 0:
+            pd.DataFrame(results).to_csv("/results/exp3_mapreduce_results.csv", index=False)
+            results_vol.commit()
+
+    pd.DataFrame(results).to_csv("/results/exp3_mapreduce_results.csv", index=False)
+    results_vol.commit()
+    print(f"Saved {len(results)} rows to /results/exp3_mapreduce_results.csv")
+    return results
+
+
+@app.local_entrypoint()
+def run_mapreduce_baseline():
+    """
+    Run map-reduce baseline on A100.
+
+    Run:  modal run modal_app.py::run_mapreduce_baseline
+    Then: python experiments/exp3_judge_extras.py --mapreduce
+    Download: modal volume get clinical-litm-results exp3_mapreduce_results.csv <local_path>
+    """
+    import pandas as pd
+    from sklearn.model_selection import train_test_split
+
+    BASE  = LOCAL_ROOT / "data" / "medalign" / "MedAlign_files"
+    TSV   = BASE / "medalign_instructions_v1_3" / "clinician-reviewed-model-responses.tsv"
+
+    df = pd.read_csv(TSV, sep="\t").dropna(subset=["question", "evidence", "filename"])
+    patients = df["filename"].unique()
+    _, test_patients = train_test_split(patients, test_size=0.30, random_state=42)
+    df_test = (df[df["filename"].isin(set(test_patients))]
+               .drop_duplicates(subset=["filename", "question"]))
+    pos_df = pd.read_csv(LOCAL_FIGURES / "exp1_litm_results.csv")
+
+    records = []
+    for _, row in df_test.iterrows():
+        fname    = str(row["filename"])
+        question = str(row["question"])
+        expected = str(row.get("evidence", "")).strip()
+        pos_row  = pos_df[(pos_df["filename"] == fname) &
+                          (pos_df["question"]  == question)]
+        pos = float(pos_row["position"].iloc[0]) if len(pos_row) > 0 else float("nan")
+        records.append({"filename": fname, "question": question,
+                        "expected": expected, "position": pos})
+
+    print(f"Dispatching {len(records)} records (map-reduce, ~10-12 LLM calls each, ~3-6 hrs)...")
+    # Use .spawn() so the local entrypoint can exit immediately.
+    # Run this entrypoint with: modal run --detach modal_app.py::run_mapreduce_baseline
+    # --detach keeps the Modal app alive after the local client exits so the
+    # spawned function is NOT cancelled when the local heartbeat stops.
+    handle = run_llm_inference_mapreduce.spawn(records)
+    print(f"Spawned function call: {handle.object_id}")
+    print("Local client exiting — remote function continues in background.")
+    print(f"Poll progress: modal volume ls clinical-litm-results")
+    print(f"Download when done: modal volume get clinical-litm-results exp3_mapreduce_results.csv "
+          f"{LOCAL_FIGURES}/exp3_mapreduce_results.csv")
+
+
+# ── Focal-loss QCCS-DiffAttn on EHRSHOT via Modal A10G ───────────────────────
+#
+# Runs exp2_qccs_diffattn_focal.py on GPU to test whether focal BCE rescues
+# the per-token gate from gradient starvation.
+#
+# Run: modal run modal_app.py::spawn_focal_all
+
+@app.function(
+    gpu="A10G",
+    timeout=7200,
+    memory=32768,
+    image=base_image,
+    volumes={"/results": results_vol, "/mnt-data": data_vol},
+)
+def run_exp2b_focal_task(task: str, epochs: int = 40):
+    """Run focal-loss QCCS-DiffAttn (Eq. 3) for one EHRSHOT lab task on GPU."""
+    import sys, json
+    sys.path.insert(0, "/experiments")
+    import exp2_ehrshot_diffattn as _exp2
+    import exp2_qccs_diffattn_focal as focal
+    from pathlib import Path as _Path
+
+    _exp2.MEDS_BASE   = _Path("/mnt-data/ehrshot/EHRSHOT_files/EHRSHOT_MEDS")
+    _exp2.ASSETS_BASE = _Path("/mnt-data/ehrshot/EHRSHOT_files/EHRSHOT_ASSETS")
+    focal.MEDS_BASE   = _Path("/mnt-data/ehrshot/EHRSHOT_files/EHRSHOT_MEDS")
+    focal.ASSETS_BASE = _Path("/mnt-data/ehrshot/EHRSHOT_files/EHRSHOT_ASSETS")
+    focal.OUT_DIR     = _Path("/results")
+
+    task_def = focal.LAB_TASKS[task]
+    result = focal.run_task_focal(task, task_def)
+    if result:
+        out = _Path("/results") / f"exp2b_focal_{task}.json"
+        out.write_text(json.dumps(result))
+    results_vol.commit()
+    return result
+
+
+@app.local_entrypoint()
+def spawn_focal_all():
+    """Spawn all 4 focal-loss QCCS-DiffAttn tasks fire-and-forget on A10G."""
+    from exp2_qccs_diffattn_focal import LAB_TASKS
+    tasks = list(LAB_TASKS.keys())
+    print(f"Spawning {len(tasks)} focal-loss tasks in parallel: {tasks}")
+    handles = []
+    for task in tasks:
+        handle = run_exp2b_focal_task.spawn(task, 40)
+        handles.append((task, handle))
+        print(f"  Spawned {task}: {handle.object_id}")
+    print("All tasks spawned. Waiting for all to complete (~3 hrs)...")
+    for task, h in handles:
+        h.get(timeout=18000)  # 5-hour timeout
+        print(f"  Completed: {task}")
+    print("All focal tasks complete. Run collect_focal_results to download.")
+
+
+@app.local_entrypoint()
+def spawn_focal_remaining():
+    """Spawn only the 2 focal tasks that did not complete (hyperkalemia, hyponatremia)."""
+    tasks = ["lab_hyperkalemia", "lab_hyponatremia"]
+    print(f"Spawning {len(tasks)} remaining focal tasks: {tasks}")
+    handles = []
+    for task in tasks:
+        handle = run_exp2b_focal_task.spawn(task, 40)
+        handles.append((task, handle))
+        print(f"  Spawned {task}: {handle.object_id}")
+    print("Waiting for both to complete (~1 hr)...")
+    for task, h in handles:
+        h.get(timeout=7200)  # 2-hour timeout per task
+        print(f"  Completed: {task}")
+    print("Done. Run collect_focal_results to download.")
+
+
+@app.local_entrypoint()
+def collect_focal_results():
+    """Download focal results from Modal volume and write local CSV."""
+    import json, pandas as pd
+    from exp2_qccs_diffattn_focal import LAB_TASKS
+
+    rows = []
+    for task in LAB_TASKS:
+        path = f"exp2b_focal_{task}.json"
+        try:
+            raw = results_vol.read_file(path)
+            if not isinstance(raw, (bytes, str)):
+                raw = b"".join(raw)
+            result = json.loads(raw)
+            rows.append(result)
+            print(f"  Loaded {path}: {result}")
+        except Exception as e:
+            print(f"  Missing {path}: {e}")
+    if not rows:
+        print("No focal results found in volume.")
+        return
+    df = pd.DataFrame(rows)
+    out = LOCAL_ROOT / "notebooks" / "inhibitory-attention-ehr" / "figures" / "exp2_qccs_diffattn_focal_results.csv"
+    df.to_csv(out, index=False)
+    print(f"\nSaved {len(df)} rows to {out}")
+    print(df.to_string(index=False))
