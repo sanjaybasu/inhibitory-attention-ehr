@@ -54,14 +54,7 @@ We introduce Query-Conditioned Clinical Suppression (QCCS), a lightweight
 character $n$-gram query-conditioned context selection gate, and evaluate it
 against BM25, BM25 with section-header filtering, dense retrieval
 (sentence-transformers), and cross-encoder reranking in a multi-arm
-proof-of-concept experiment ($N{=}83$ held-out instructions). At $k{=}20$,
-BM25 retrieves the gold-standard evidence sentence in 98.8\% of test
-instructions overall and 96.7\% of middle-position instructions (context
-precision@20: 59.5\%); cross-encoder reranking achieves 96.4\% overall and
-90.0\% middle; dense retrieval achieves 94.0\% overall; QCCS achieves 34.9\%
-overall and 23.3\% for middle-position instructions (precision@20: 0.7\%).
-A no-query ablation shows that query conditioning accounts for +23.8 percentage
-points of middle-position recall.
+proof-of-concept experiment ($N{=}83$ held-out instructions).
 End-to-end instruction-following experiments with Qwen2.5-7B-Instruct (16k-token
 context window) show that QCCS substantially outperforms all five comparators,
 evaluated by LLM-as-judge semantic scoring (primary: Claude Haiku; second judge:
@@ -69,14 +62,19 @@ claude-sonnet-4-6; Cohen's $\kappa{=}0.767$ for QCCS, the arm with meaningful
 positive-class variation): QCCS 16.7\% [95\% CI: 3, 30]
 vs.\ BM25 3.3\% [0, 10] vs.\ cross-encoder 0.0\% [0, 0] vs.\ dense 0.0\% [0, 0]
 vs.\ full context 6.7\% [0, 17] for middle-position instructions; overall, QCCS
-reaches 25.3\% [17, 35] vs.\ $\leq$3.6\% for all retrieval-only comparators. Critically,
-a conditional accuracy analysis reveals that Stage-2 accuracy remains
-$\leq$2.6\% for all lexical and neural comparators even in the 74--82
-instructions where those arms successfully retrieve the gold-evidence sentence
-(by lexical overlap), while QCCS achieves 25.0\% accuracy in the 52 of 83
-instructions where it does \emph{not} retrieve the gold sentence by that
-criterion---establishing that \textbf{query-aligned context selection, not
-gold-sentence retrieval, is the binding constraint for EHR instruction following}.
+reaches 25.3\% [17, 35] vs.\ $\leq$3.6\% for all retrieval-only comparators.
+This end-to-end advantage is not attributable to higher retrieval recall: at
+$k{=}20$, BM25 retrieves the gold-standard evidence sentence in 98.8\% of test
+instructions (QCCS: 34.9\%); cross-encoder reranking achieves 96.4\% overall;
+dense retrieval 94.0\%. A conditional accuracy analysis reveals that Stage-2
+accuracy remains $\leq$2.6\% for all retrieval-based comparators even in the
+74--82 instructions where those arms successfully retrieve the gold-evidence
+sentence (by lexical overlap), while QCCS achieves 25.0\% accuracy in the 52 of
+83 instructions where it does \emph{not} retrieve the gold sentence---establishing
+that \textbf{query-aligned context selection, not gold-sentence retrieval, is the
+binding constraint for EHR instruction following}. A no-query ablation confirms
+that query conditioning accounts for +23.8 percentage points of middle-position
+recall.
 Code is available at \texttt{[anonymized for review]}.
 \end{abstract}
 
