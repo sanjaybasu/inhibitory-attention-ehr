@@ -2112,7 +2112,12 @@ main finding.
 \caption{BM25 and QCCS semantic hit rate (\%) and Stage-2 conditional accuracy
   at NLI entailment thresholds $\theta \in \{0.3, 0.4, 0.5, 0.6\}$.
   Cond.\ acc.\ (hit=1): Stage-2 accuracy restricted to instructions where
-  at least one retained sentence has NLI entailment $> \theta$.}
+  at least one retained sentence has NLI entailment $> \theta$.
+  The $\theta{=}0.5$ QCCS figures (9.6\%/50.0\%) differ slightly from
+  Table~\ref{tab:sem_condacc} (12.0\%/60.0\%) because the sweep uses
+  per-sentence \emph{maximum} bidirectional entailment score whereas
+  Table~\ref{tab:sem_condacc} uses a two-pass binary criterion; both
+  support the same qualitative conclusion.}
 \label{tab:nli_thresh}
 \small
 \begin{tabular}{@{}rcccc@{}}
@@ -2121,27 +2126,28 @@ main finding.
 \cmidrule(lr){2-3}\cmidrule(lr){4-5}
 $\theta$ & Sem.\ hit (\%) & Cond.\ acc.\ (\%) & Sem.\ hit (\%) & Cond.\ acc.\ (\%) \\
 \midrule
-0.3 & \textit{pending} & \textit{pending} & \textit{pending} & \textit{pending} \\
-0.4 & \textit{pending} & \textit{pending} & \textit{pending} & \textit{pending} \\
-0.5 & 45.8 & 0.0 & 12.0 & 60.0 \\
-0.6 & \textit{pending} & \textit{pending} & \textit{pending} & \textit{pending} \\
+0.3 & 65.1 & 0.0 & 16.9 & 28.6 \\
+0.4 & 55.4 & 0.0 & 12.0 & 40.0 \\
+0.5 & 45.8 & 0.0 &  9.6 & 50.0 \\
+0.6 & 38.6 & 0.0 &  4.8 & 50.0 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \paragraph{Interpretation.}
-At $\theta = 0.5$, BM25 achieves 0.0\% Stage-2 accuracy in the 38/83 instructions
-where NLI confirms semantic support (Table~\ref{tab:sem_condacc}). This finding
-is expected to hold at $\theta \in \{0.3, 0.4\}$ (looser thresholds expand the
-BM25 hit set, admitting more marginal semantic hits; because BM25 already fails
-in confirmed hits, adding weaker hits cannot improve the conditional accuracy)
-and at $\theta = 0.6$ (stricter thresholds shrink the hit set to higher-confidence
-cases; BM25's difficulty is not attributable to weak entailment, so this is also
-expected to be 0.0\%). The threshold does affect QCCS conditional accuracy:
-a lower threshold includes more marginal semantic hits where gold support is
-weaker, which may reduce the 60.0\% estimate; a higher threshold restricts to
-higher-confidence cases where QCCS is more likely to correctly answer.
-All of these directional predictions can be verified from the re-run results.
+BM25 achieves 0.0\% Stage-2 conditional accuracy at all four thresholds, with
+semantic hit rates ranging from 65.1\% ($\theta{=}0.3$) to 38.6\% ($\theta{=}0.6$).
+The invariance of BM25 conditional accuracy across the full threshold range confirms
+that failure is not attributable to the specific threshold choice: even among the
+54/83 instructions where NLI entailment $> 0.3$ places a semantically relevant
+sentence in BM25 context, the LLM never answers correctly. This establishes
+threshold-independent evidence for BM25 Stage-2 failure.
+QCCS conditional accuracy rises monotonically with threshold (28.6\% at $\theta{=}0.3$
+to 50.0\% at $\theta{=}0.6$), reflecting that stricter thresholds select
+higher-confidence NLI hits where QCCS's query-aligned context is more
+unambiguously correct. The QCCS hit set shrinks (16.9\% to 4.8\%) but becomes
+more accurate, consistent with the gate selecting a higher-precision subset
+at higher entailment confidence.
 
 
 % ── Gate Architecture Ablations ───────────────────────────────────────────────
