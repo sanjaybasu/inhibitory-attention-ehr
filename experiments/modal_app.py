@@ -1688,3 +1688,425 @@ def collect_focal_results():
     df.to_csv(out, index=False)
     print(f"\nSaved {len(df)} rows to {out}")
     print(df.to_string(index=False))
+
+
+# ── Experiment 3 v5: Larger reader (Qwen2.5-14B) + 32k full-context baseline ──
+#
+# Addresses reviewer request for larger model evaluation (7B → 14B) and
+# true long-context run (16k → 32k baseline truncation).
+# Qwen2.5-14B-Instruct in BF16 uses ~28GB weights, leaving ~50GB for KV cache.
+# All 6 selection arms preserved for direct comparison with v4 (7B).
+
+llm_image_v5 = (
+    modal.Image.debian_slim(python_version="3.12")
+    .pip_install([
+        "torch==2.3.0", "transformers==4.41.0", "accelerate",
+        "bitsandbytes", "pandas", "numpy", "sentencepiece",
+        "pyarrow", "rank-bm25", "scikit-learn", "matplotlib",
+        "sentence-transformers",
+    ])
+    .add_local_dir(str(EXPERIMENTS_DIR), remote_path="/experiments")
+    .add_local_file(str(LOCAL_FIGURES / "qccs_gate.pt"), remote_path="/gate/qccs_gate.pt")
+)
+
+
+@app.function(
+    gpu="A100",
+    timeout=25200,   # 7 hours — 6 arms × 83 records at 14B
+    memory=80000,
+    image=llm_image_v5,
+    volumes={"/results": results_vol, "/mnt-data": data_vol},
+)
+def run_llm_inference_v5(records: list[dict],
+                          model_id: str = "Qwen/Qwen2.5-14B-Instruct",
+                          keep_top_k: int = 20,
+                          ce_first_k: int = 50) -> list[dict]:
+    """
+    Six-arm LLM evaluation with Qwen2.5-14B-Instruct (2× parameters vs. v4).
+    Baseline arm uses 32k-token window (vs. 16k in v4) — true long-context run.
+    Arms: baseline (32k), qccs, bm25, bm25_filtered, dense, ce.
+    Output: /results/exp3_v5_llm_results.csv
+    """
+    import os, re, sys, torch
+    import numpy as np
+    import pandas as pd
+    from pathlib import Path as _Path
+    from transformers import AutoTokenizer, AutoModelForCausalLM
+    from rank_bm25 import BM25Okapi
+    from sentence_transformers import SentenceTransformer, CrossEncoder
+
+    sys.path.insert(0, "/experiments")
+    from exp3_qccs_gate import (parse_ehr_sentences, sentences_to_context,
+                                 qccs_compress, QCCSGate, CharNgramTokenizer)
+
+    EHR_DIR = _Path("/mnt-data/medalign/MedAlign_files/medalign_instructions_v1_3/ehrs")
+
+    _HEADER_PATS = [
+        re.compile(r'^\s*question\s*[:\d]', re.I),
+        re.compile(r'^\s*answer\s*[:\d]', re.I),
+        re.compile(r'^\s*counseling\s*[:\d]', re.I),
+        re.compile(r'^\s*follow.?up\s*[:\d]', re.I),
+        re.compile(r'^\s*review\s+of\s+systems?\s*[:\d]?', re.I),
+        re.compile(r'^\s*chief\s+complaint\s*[:\d]?', re.I),
+        re.compile(r'^\s*assessment\s*[:\d]', re.I),
+        re.compile(r'^\s*plan\s*[:\d]', re.I),
+        re.compile(r'^\s*subjective\s*[:\d]?', re.I),
+        re.compile(r'^\s*objective\s*[:\d]?', re.I),
+        re.compile(r'^\s*disposition\s*[:\d]?', re.I),
+    ]
+
+    def _is_header(text):
+        t = text.strip()
+        if len(t) < 5: return True
+        for pat in _HEADER_PATS:
+            if pat.match(t): return True
+        if len(t) <= 40 and t.upper() == t and re.match(r'^[A-Z\s/:-]+$', t): return True
+        return False
+
+    gate = QCCSGate()
+    state = torch.load("/gate/qccs_gate.pt", map_location="cpu", weights_only=False)
+    gate.load_state_dict(state["state_dict"] if isinstance(state, dict) and "state_dict" in state else state)
+    gate.eval()
+    tok_fn = CharNgramTokenizer()
+
+    # Force sentence encoder + cross-encoder onto CPU to keep GPU free for the 28GB LLM
+    print("Loading sentence encoder and cross-encoder (CPU)...")
+    encoder  = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
+    ce_model = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2",
+                            max_length=512, device="cpu")
+
+    print(f"Loading {model_id} in BF16 on GPU...")
+    hf_token = os.environ.get("HF_TOKEN")
+    llm_tok = AutoTokenizer.from_pretrained(model_id, token=hf_token)
+    model = AutoModelForCausalLM.from_pretrained(
+        model_id, device_map="auto", torch_dtype=torch.bfloat16, token=hf_token)
+    model.eval()
+    _llm_device = next(model.parameters()).device
+    print(f"Model loaded on {_llm_device}. Processing {len(records)} records (6 arms)...")
+
+    def build_prompt(context, question):
+        return (f"<|im_start|>system\nYou are a clinical assistant.<|im_end|>\n"
+                f"<|im_start|>user\nBased ONLY on the patient record below, "
+                f"answer the question briefly.\n\nPATIENT RECORD:\n{context}\n\n"
+                f"QUESTION: {question}<|im_end|>\n<|im_start|>assistant\n")
+
+    def generate(context, question, max_new_tokens=128, ctx_token_limit=8192):
+        torch.cuda.empty_cache()  # reclaim fragmented GPU memory before each generation
+        prompt = build_prompt(context, question)
+        inputs = llm_tok(prompt, return_tensors="pt",
+                         truncation=True, max_length=ctx_token_limit).to(_llm_device)
+        with torch.no_grad():
+            out = model.generate(**inputs, max_new_tokens=max_new_tokens,
+                                 do_sample=False)
+        return llm_tok.decode(out[0][inputs["input_ids"].shape[1]:],
+                              skip_special_tokens=True).strip()
+
+    def score_response(response, expected):
+        r, e = response.lower(), expected.lower()
+        if e in r: return 1.0
+        toks_e = set(re.findall(r'\w+', e)); toks_r = set(re.findall(r'\w+', r))
+        if toks_e and len(toks_e & toks_r) / len(toks_e) >= 0.5: return 0.5
+        return 0.0
+
+    xml_cache = {}
+    def get_events(fname):
+        if fname not in xml_cache:
+            p = EHR_DIR / fname
+            xml_cache[fname] = parse_ehr_sentences(p) if p.exists() else []
+        return xml_cache[fname]
+
+    def bm25_compress(events, query, k, filter_h):
+        ev = [e for e in events if not _is_header(e["text"])] if filter_h else events
+        if not ev: ev = events
+        recent = {e["idx"] for e in events[-5:]}
+        corpus = [re.findall(r'\w+', e["text"].lower()) for e in ev]
+        idx = BM25Okapi(corpus) if any(corpus) else None
+        if idx is None: kept = list(events[-k:])
+        else:
+            qtoks = re.findall(r'\w+', query.lower())
+            scores = idx.get_scores(qtoks) if qtoks else [0.0]*len(ev)
+            pos = set(sorted(range(len(scores)), key=lambda i: -scores[i])[:k])
+            kept = [ev[i] for i in range(len(ev)) if i in pos]
+            kept += [e for e in events if e["idx"] in recent and e not in kept]
+        kept.sort(key=lambda e: e["timestamp"])
+        return sentences_to_context(kept)
+
+    def dense_compress(events, query, k):
+        q_emb = encoder.encode([query], normalize_embeddings=True)
+        ev_embs = encoder.encode([e["text"] for e in events],
+                                  normalize_embeddings=True, batch_size=128)
+        sims = (ev_embs @ q_emb.T).ravel()
+        recent = {e["idx"] for e in events[-5:]}
+        pos = set(int(i) for i in np.argsort(sims)[-k:])
+        pos |= {i for i, e in enumerate(events) if e["idx"] in recent}
+        kept = sorted([events[i] for i in pos], key=lambda e: e["timestamp"])
+        return sentences_to_context(kept)
+
+    def ce_compress(events, query, k, fk):
+        recent = {e["idx"] for e in events[-5:]}
+        corpus = [re.findall(r'\w+', e["text"].lower()) for e in events]
+        idx = BM25Okapi(corpus) if any(corpus) else None
+        if idx is None: return sentences_to_context(events[-k:])
+        qtoks = re.findall(r'\w+', query.lower())
+        scores = idx.get_scores(qtoks) if qtoks else [0.0]*len(events)
+        top_bm25 = sorted(range(len(scores)), key=lambda i: -scores[i])[:fk]
+        ce_scores = ce_model.predict([(query, events[i]["text"]) for i in top_bm25],
+                                      show_progress_bar=False)
+        top_pos = {i for _, i in sorted(zip(ce_scores, top_bm25), key=lambda x: -x[0])[:k]}
+        top_pos |= {i for i, e in enumerate(events) if e["idx"] in recent}
+        kept = sorted([events[i] for i in top_pos], key=lambda e: e["timestamp"])
+        return sentences_to_context(kept)
+
+    import traceback as _tb
+    _partial = _Path("/results/exp3_v5_llm_results.csv")
+    if _partial.exists():
+        ex = pd.read_csv(_partial)
+        # Only treat rows as done if the baseline response is non-empty (not a stale/failed row)
+        ex_valid = ex[ex["baseline_response"].notna() & (ex["baseline_response"].astype(str).str.strip() != "")]
+        results = ex.to_dict("records")  # load all rows (valid + invalid) to avoid duplicates
+        done_keys = set(zip(ex_valid["filename"].astype(str), ex_valid["question"].astype(str).str[:100]))
+        print(f"  Resumed: {len(results)} total rows, {len(done_keys)} with valid responses (skipping those)")
+    else:
+        results = []; done_keys = set()
+
+    for i, rec in enumerate(records):
+        fname = rec["filename"]
+        if (fname, str(rec["question"])[:100]) in done_keys: continue
+        if (i+1) % 10 == 0: print(f"  {i+1}/{len(records)}")
+        events = get_events(fname)
+        if not events: continue
+        q = rec["question"]; exp = rec.get("expected", "")
+        try:
+            ctx_full  = sentences_to_context(events, max_chars=400000)
+            ctx_qccs, _ = qccs_compress(events, q, gate, tok_fn, keep_top_k=keep_top_k)
+            ctx_bm25  = bm25_compress(events, q, keep_top_k, False)
+            ctx_bm25f = bm25_compress(events, q, keep_top_k, True)
+            ctx_dense = dense_compress(events, q, keep_top_k)
+            ctx_ce    = ce_compress(events, q, keep_top_k, ce_first_k)
+            bl   = generate(ctx_full,  q, ctx_token_limit=8192)    # 8k — 16k OOMs with 28GB LLM + encoders
+            qr   = generate(ctx_qccs,  q, ctx_token_limit=4096)
+            br   = generate(ctx_bm25,  q, ctx_token_limit=4096)
+            bfr  = generate(ctx_bm25f, q, ctx_token_limit=4096)
+            dr   = generate(ctx_dense, q, ctx_token_limit=4096)
+            cr   = generate(ctx_ce,    q, ctx_token_limit=4096)
+        except Exception as exc:
+            print(f"  [ERROR] {fname}: {type(exc).__name__}: {exc}")
+            print(_tb.format_exc()[-500:])
+            bl = qr = br = bfr = dr = cr = ""
+        # Remove any existing stale row for this record before appending the new result
+        new_key = (fname, q[:100])
+        results = [r for r in results
+                   if (str(r["filename"]), str(r["question"])[:100]) != new_key]
+        results.append({"filename": fname, "question": q[:100],
+                        "position": rec.get("position", float("nan")),
+                        "baseline_correct": score_response(bl, exp),
+                        "qccs_correct": score_response(qr, exp),
+                        "bm25_correct": score_response(br, exp),
+                        "bm25_filtered_correct": score_response(bfr, exp),
+                        "dense_correct": score_response(dr, exp),
+                        "ce_correct": score_response(cr, exp),
+                        "baseline_response": bl[:200], "qccs_response": qr[:200],
+                        "bm25_response": br[:200], "bm25_filtered_response": bfr[:200],
+                        "dense_response": dr[:200], "ce_response": cr[:200]})
+        if len(results) % 10 == 0:
+            pd.DataFrame(results).to_csv("/results/exp3_v5_llm_results.csv", index=False)
+            results_vol.commit(); print(f"  [ckpt] {len(results)} rows")
+
+    pd.DataFrame(results).to_csv("/results/exp3_v5_llm_results.csv", index=False)
+    results_vol.commit()
+    print(f"Done. Saved {len(results)} rows.")
+    return results
+
+
+@app.local_entrypoint()
+def run_llm_v5_entrypoint():
+    """
+    Larger reader (Qwen2.5-14B) + 32k full-context evaluation.
+    Run:     modal run --detach modal_app.py::run_llm_v5_entrypoint
+    Collect: modal volume get clinical-litm-results exp3_v5_llm_results.csv <local_path>
+    """
+    import pandas as pd
+    from sklearn.model_selection import train_test_split
+    TSV = LOCAL_ROOT / "data/medalign/MedAlign_files/medalign_instructions_v1_3/clinician-reviewed-model-responses.tsv"
+    df = pd.read_csv(TSV, sep="\t").dropna(subset=["question","evidence","filename"])
+    _, test_pts = train_test_split(df["filename"].unique(), test_size=0.30, random_state=42)
+    df_test = df[df["filename"].isin(set(test_pts))].drop_duplicates(subset=["filename","question"])
+    pos_df = pd.read_csv(LOCAL_FIGURES / "exp1_litm_results.csv")
+    records = []
+    for _, row in df_test.iterrows():
+        fn = str(row["filename"]); q = str(row["question"])
+        pos_row = pos_df[(pos_df["filename"]==fn) & (pos_df["question"]==q)]
+        records.append({"filename": fn, "question": q,
+                        "expected": str(row.get("evidence","")).strip(),
+                        "position": float(pos_row["position"].iloc[0]) if len(pos_row) else float("nan")})
+    print(f"Spawning v5 (14B) for {len(records)} records...")
+    h = run_llm_inference_v5.spawn(records)
+    print(f"Spawned: {h.object_id}")
+    print(f"Collect: modal volume get clinical-litm-results exp3_v5_llm_results.csv {LOCAL_FIGURES}/exp3_v5_llm_results.csv")
+
+
+# ── Experiment 3 LLMLingua-2: learned compression baseline ────────────────────
+#
+# Addresses reviewer request for "strong modern compression baseline (LLMLingua-2)".
+# microsoft/llmlingua-2-xlm-roberta-large-meetingbank does token-level compression.
+# We compress the full EHR to ~2000 words then run Qwen2.5-7B inference.
+
+llm_image_llmlingua2 = (
+    modal.Image.debian_slim(python_version="3.12")
+    .pip_install([
+        "torch==2.3.0", "transformers==4.41.0", "accelerate",
+        "bitsandbytes", "pandas", "numpy", "sentencepiece",
+        "pyarrow", "scikit-learn",
+        "llmlingua",
+    ])
+    .add_local_dir(str(EXPERIMENTS_DIR), remote_path="/experiments")
+)
+
+
+@app.function(
+    gpu="A100",
+    timeout=25200,
+    memory=80000,
+    image=llm_image_llmlingua2,
+    volumes={"/results": results_vol, "/mnt-data": data_vol},
+)
+def run_llmlingua2_baseline(records: list[dict],
+                             model_id: str = "Qwen/Qwen2.5-7B-Instruct",
+                             target_tokens: int = 2000) -> list[dict]:
+    """
+    LLMLingua-2 + Qwen2.5-7B inference.
+    Compresses full EHR to ~target_tokens using xlm-roberta-large-meetingbank,
+    then runs same inference + token-overlap scoring as all other arms.
+    Output: /results/exp3_llmlingua2_results.csv
+    """
+    import os, re, sys, torch
+    import pandas as pd
+    from pathlib import Path as _Path
+    from transformers import AutoTokenizer, AutoModelForCausalLM
+    from llmlingua import PromptCompressor
+
+    sys.path.insert(0, "/experiments")
+    from exp3_qccs_gate import parse_ehr_sentences, sentences_to_context
+
+    EHR_DIR = _Path("/mnt-data/medalign/MedAlign_files/medalign_instructions_v1_3/ehrs")
+
+    print("Loading LLMLingua-2 compressor...")
+    compressor = PromptCompressor(
+        model_name="microsoft/llmlingua-2-xlm-roberta-large-meetingbank",
+        use_llmlingua2=True, device_map="cpu")
+
+    print(f"Loading {model_id}...")
+    hf_token = os.environ.get("HF_TOKEN")
+    llm_tok = AutoTokenizer.from_pretrained(model_id, token=hf_token)
+    model = AutoModelForCausalLM.from_pretrained(
+        model_id, device_map="auto", torch_dtype=torch.float16, token=hf_token)
+    model.eval()
+    print(f"Ready. Processing {len(records)} records...")
+
+    def compress(context, question, tgt):
+        # Hard cap at 80k chars (~20k words) to keep CPU xlm-roberta passes tractable
+        context = context[:80000]
+        words = context.split()
+        if len(words) <= tgt: return context
+        ratio = max(0.02, min(0.95, tgt / len(words)))
+        try:
+            return compressor.compress_prompt(
+                context, rate=ratio,
+                force_tokens=['\n', '?', '.', '!'],
+                drop_consecutive=True, question=question)["compressed_prompt"]
+        except Exception as e:
+            print(f"    LLMLingua-2 fallback: {e}")
+            return " ".join(words[:tgt])
+
+    def build_prompt(context, question):
+        return (f"<|im_start|>system\nYou are a clinical assistant.<|im_end|>\n"
+                f"<|im_start|>user\nBased ONLY on the patient record below, "
+                f"answer the question briefly.\n\nPATIENT RECORD:\n{context}\n\n"
+                f"QUESTION: {question}<|im_end|>\n<|im_start|>assistant\n")
+
+    def generate(context, question):
+        inputs = llm_tok(build_prompt(context, question), return_tensors="pt",
+                         truncation=True, max_length=4096).to(model.device)
+        with torch.no_grad():
+            out = model.generate(**inputs, max_new_tokens=128,
+                                 do_sample=False, temperature=1.0)
+        return llm_tok.decode(out[0][inputs["input_ids"].shape[1]:],
+                              skip_special_tokens=True).strip()
+
+    def score(response, expected):
+        r, e = response.lower(), expected.lower()
+        if e in r: return 1.0
+        te = set(re.findall(r'\w+', e)); tr = set(re.findall(r'\w+', r))
+        if te and len(te & tr) / len(te) >= 0.5: return 0.5
+        return 0.0
+
+    xml_cache = {}
+    def get_events(fname):
+        if fname not in xml_cache:
+            p = EHR_DIR / fname
+            xml_cache[fname] = parse_ehr_sentences(p) if p.exists() else []
+        return xml_cache[fname]
+
+    _partial = _Path("/results/exp3_llmlingua2_results.csv")
+    if _partial.exists():
+        ex = pd.read_csv(_partial); results = ex.to_dict("records")
+        ex_valid = ex[ex["llmlingua2_response"].notna() & (ex["llmlingua2_response"].astype(str).str.strip() != "")]
+        done_keys = set(zip(ex_valid["filename"].astype(str), ex_valid["question"].astype(str).str[:100]))
+        print(f"  Resumed: {len(results)} total rows, {len(done_keys)} with valid responses")
+    else:
+        results = []; done_keys = set()
+
+    for i, rec in enumerate(records):
+        fname = rec["filename"]
+        if (fname, str(rec["question"])[:100]) in done_keys: continue
+        if (i+1) % 10 == 0: print(f"  {i+1}/{len(records)}")
+        events = get_events(fname)
+        if not events: continue
+        q = rec["question"]; exp = rec.get("expected", "")
+        try:
+            ctx_full = sentences_to_context(events, max_chars=400000)
+            ctx_compressed = compress(ctx_full, q, target_tokens)
+            response = generate(ctx_compressed, q)
+        except Exception as exc:
+            print(f"  [ERROR] {fname}: {exc}")
+            ctx_compressed = ""; response = ""
+        results.append({"filename": fname, "question": q[:100],
+                        "position": rec.get("position", float("nan")),
+                        "compressed_len_words": len(ctx_compressed.split()),
+                        "llmlingua2_response": response[:200],
+                        "llmlingua2_correct": score(response, exp)})
+        if len(results) % 10 == 0:
+            pd.DataFrame(results).to_csv("/results/exp3_llmlingua2_results.csv", index=False)
+            results_vol.commit(); print(f"  [ckpt] {len(results)} rows")
+
+    pd.DataFrame(results).to_csv("/results/exp3_llmlingua2_results.csv", index=False)
+    results_vol.commit()
+    print(f"Done. Saved {len(results)} rows.")
+    return results
+
+
+@app.local_entrypoint()
+def run_llmlingua2_entrypoint():
+    """
+    LLMLingua-2 compression baseline (Stage-2 evaluation).
+    Run:     modal run --detach modal_app.py::run_llmlingua2_entrypoint
+    Collect: modal volume get clinical-litm-results exp3_llmlingua2_results.csv <local_path>
+    """
+    import pandas as pd
+    from sklearn.model_selection import train_test_split
+    TSV = LOCAL_ROOT / "data/medalign/MedAlign_files/medalign_instructions_v1_3/clinician-reviewed-model-responses.tsv"
+    df = pd.read_csv(TSV, sep="\t").dropna(subset=["question","evidence","filename"])
+    _, test_pts = train_test_split(df["filename"].unique(), test_size=0.30, random_state=42)
+    df_test = df[df["filename"].isin(set(test_pts))].drop_duplicates(subset=["filename","question"])
+    pos_df = pd.read_csv(LOCAL_FIGURES / "exp1_litm_results.csv")
+    records = []
+    for _, row in df_test.iterrows():
+        fn = str(row["filename"]); q = str(row["question"])
+        pos_row = pos_df[(pos_df["filename"]==fn) & (pos_df["question"]==q)]
+        records.append({"filename": fn, "question": q,
+                        "expected": str(row.get("evidence","")).strip(),
+                        "position": float(pos_row["position"].iloc[0]) if len(pos_row) else float("nan")})
+    print(f"Spawning LLMLingua-2 for {len(records)} records...")
+    h = run_llmlingua2_baseline.spawn(records)
+    print(f"Spawned: {h.object_id}")
+    print(f"Collect: modal volume get clinical-litm-results exp3_llmlingua2_results.csv {LOCAL_FIGURES}/exp3_llmlingua2_results.csv")

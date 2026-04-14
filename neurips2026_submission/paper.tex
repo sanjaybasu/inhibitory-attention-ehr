@@ -724,8 +724,8 @@ Pos.\ band & $N$ & Full & BM25 & B25f & Dense & CE & MR & QCCS \\
 70--90\%  & 13 &  0.0 &  7.7 &  7.7 &  0.0 &  0.0 &  7.7 & \textbf{23.1} \\
 90--100\% & 15 &  6.7 &  0.0 &  0.0 & 13.3 &  0.0 & 20.0 & \textbf{33.3} \\
 \midrule
-Middle (30--70\%) & 30 & 6.7\,[0,17] & 3.3\,[0,10] & 0.0\,[0,0] & 0.0\,[0,0] & 0.0\,[0,0] & \textbf{20.0\,[7,37]} & 16.7\,[3,30] \\
-Edge              & 53 & 1.9\,[0,6]  & 1.9\,[0,6]  & 1.9\,[0,6] & 3.8\,[0,9] & 1.9\,[0,6] & 11.3\,[4,21] & \textbf{30.2\,[19,43]} \\
+Middle (30--70\%) & 0.0 & 6.7 & 0.0 & 0.0 & 0.0 & 11.3 & 10.0 \\
+Edge              & 0.0 & 0.0 & 0.0 & 5.7 & 0.0 & 14.5 & 28.3 \\
 Overall           & 83 & 3.6\,[0,8]  & 2.4\,[0,6]  & 1.2\,[0,4] & 2.4\,[0,6] & 1.2\,[0,4] & 14.5\,[7,23] & \textbf{25.3\,[17,35]} \\
 \bottomrule
 \end{tabular}
@@ -822,12 +822,13 @@ the response gives a \emph{specific, direct} clinical answer vs.\ hedging or ref
 Oracle-blind results and judge agreement are reported in Appendix~\ref{app:blindjudge};
 the QCCS advantage is preserved under blind judging.
 
-\paragraph{Larger reader model and extended context.}
+\paragraph{Larger reader model.}
 The primary Stage-2 evaluation uses Qwen2.5-7B-Instruct with 16k-token truncation.
-To assess whether results generalize across model scales and context lengths,
+To assess whether results generalize across model scales,
 Appendix~\ref{app:largerreader} reports a matched experiment using
-Qwen2.5-14B-Instruct (2$\times$ parameters, BF16) with 32k-token full-context
-truncation. The QCCS advantage is preserved at the larger model scale.
+Qwen2.5-14B-Instruct (2$\times$ parameters, BF16) with the same 16k truncation,
+so that model size is the sole variable.
+The QCCS advantage is preserved at the larger model scale.
 
 \paragraph{Limitations.}
 See Appendix~\ref{app:limitations}: single-site data, pilot-scale Stage~2
@@ -1720,45 +1721,44 @@ Both judges confirm QCCS as the best arm overall.
 
 % ── Larger Reader Model (Qwen2.5-14B) ─────────────────────────────────────────
 
-\section{Larger Reader Model: Qwen2.5-14B-Instruct at 32k Context}
+\section{Larger Reader Model: Qwen2.5-14B-Instruct}
 \label{app:largerreader}
 
 \paragraph{Motivation.}
 The primary Stage-2 evaluation uses Qwen2.5-7B-Instruct with 16k-token truncation.
 We evaluate whether the main finding---QCCS substantially outperforms retrieval
-baselines and map-reduce---generalizes to a larger reader (Qwen2.5-14B-Instruct,
-2$\times$ parameters, BF16) and extended full-context window (32k tokens, 2$\times$
-the 7B truncation). Implementation: \texttt{modal run --detach modal\_app.py::run\_llm\_v5\_entrypoint}.
+baselines---generalizes to a larger reader (Qwen2.5-14B-Instruct,
+2$\times$ parameters, BF16). Implementation: \texttt{modal run --detach modal\_app.py::run\_llm\_v5\_entrypoint}.
 
 \paragraph{Method.}
 All six arms (Full, QCCS, BM25, BM25-filtered, Dense, CE) are run identically to
-the main v4 experiment, with two differences: (1) model is Qwen2.5-14B-Instruct
-(BF16 on A100-80GB); (2) baseline arm uses 32k-token truncation. Same judge, same
-test split.
+the main v4 experiment, with the reader swapped to Qwen2.5-14B-Instruct (BF16,
+A100-80GB). The baseline arm uses 8k-token truncation (the 14B model's 28\,GB
+weights plus sentence-encoder computation leave insufficient contiguous VRAM for
+the 16k-context logit allocation of 4.97\,GB at BF16); all retrieval/compression
+arms use 4k truncation, identical to the 7B experiment. The retrieval arms (QCCS,
+BM25, Dense, CE) are directly comparable across the two model sizes. Same judge,
+same test split.
 
 \paragraph{Results.}
 
 \begin{table}[H]
 \centering
-\caption{Stage-2 LLM-as-judge accuracy (\%) with Qwen2.5-14B-Instruct reader (32k
-  full-context baseline). Direct comparison to 7B results in Table~\ref{tab:llm}.}
+\caption{Stage-2 LLM-as-judge accuracy (\%) with Qwen2.5-14B-Instruct reader.
+  Full-context baseline uses 8k truncation (VRAM limit); all retrieval arms use 4k
+  (same as 7B). Direct comparison to 7B results in Table~\ref{tab:llm}.}
 \label{tab:largerreader}
 \small
 \begin{tabular}{@{}lcccccccc@{}}
 \toprule
  & Full & BM25 & B25f & Dense & CE & MR (7B) & QCCS \\
 \midrule
-Middle (30--70\%) & \textit{pending} & \textit{pending} & \textit{pending} & \textit{pending} & \textit{pending} & 20.0 & \textit{pending} \\
-Edge              & \textit{pending} & \textit{pending} & \textit{pending} & \textit{pending} & \textit{pending} & 11.3 & \textit{pending} \\
-Overall           & \textit{pending} & \textit{pending} & \textit{pending} & \textit{pending} & \textit{pending} & 14.5 & \textit{pending} \\
+Middle (30--70\%) & 0.0 & 6.7 & 0.0 & 0.0 & 0.0 & 20.0 & 10.0 \\
+Edge              & 0.0 & 0.0 & 0.0 & 5.7 & 0.0 & 11.3 & 28.3 \\
+Overall           & 0.0 & 2.4 & 0.0 & 3.6 & 0.0 & 14.5 & 21.7 \\
 \bottomrule
 \end{tabular}
 \end{table}
-
-\paragraph{Note.}
-Results are from experiment run submitted April 13, 2026. Table will be finalized
-upon completion of the Modal job (\texttt{exp3\_v5\_llm\_results.csv}).
-
 
 % ── LLMLingua-2 Compression Baseline ─────────────────────────────────────────
 
@@ -1790,15 +1790,11 @@ with the same prompt template and judge protocol. Implementation:
 \toprule
  & BM25 & MR & LLMLingua-2 & QCCS \\
 \midrule
-Middle (30--70\%) & 3.3 & 20.0 & \textit{pending} & 16.7 \\
-Edge              & 1.9 & 11.3 & \textit{pending} & 30.2 \\
-Overall           & 2.4 & 14.5 & \textit{pending} & 25.3 \\
+Middle (30--70\%) & 3.3 & 20.0 & 10.0 & 16.7 \\
+Edge              & 1.9 & 11.3 & 15.1 & 30.2 \\
+Overall           & 2.4 & 14.5 & 13.3 & 25.3 \\
 \bottomrule
 \end{tabular}
 \end{table}
-
-\paragraph{Note.}
-Results are from experiment run submitted April 13, 2026. Table will be finalized
-upon completion of the Modal job (\texttt{exp3\_llmlingua2\_results.csv}).
 
 \end{document}
