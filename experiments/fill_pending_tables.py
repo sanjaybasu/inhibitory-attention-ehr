@@ -278,6 +278,47 @@ def _patch_llmlingua2_table(ov, mid, edg):
     print(f"Patched tab:llmlingua2 in {TEX}")
 
 
+# ── DOS-RAG / MMR ─────────────────────────────────────────────────────────────
+
+def process_dosrag_mmr(client: anthropic.Anthropic) -> dict | None:
+    """Judge DOS-RAG and MMR arms; print accuracy numbers for appendix tables."""
+    csv_path = FIGURES / "exp3_dosrag_mmr_results.csv"
+    if not csv_path.exists():
+        print("Downloading exp3_dosrag_mmr_results.csv...")
+        if not modal_download("exp3_dosrag_mmr_results.csv", csv_path):
+            print("  DOS-RAG/MMR not ready yet.")
+            return None
+
+    df = pd.read_csv(csv_path)
+    for arm in ("dosrag", "mmr"):
+        resp_col = f"{arm}_response"
+        ne = df[resp_col].notna() & (df[resp_col].str.strip() != "")
+        print(f"{arm} CSV: {len(df)} rows, {ne.sum()} non-empty responses")
+        if ne.sum() == 0:
+            print(f"  All {arm} responses empty — experiment not ready.")
+            return None
+
+    judged_path = FIGURES / "exp3_dosrag_mmr_results_judged.csv"
+    df_j = pd.read_csv(judged_path) if judged_path.exists() else df.copy()
+
+    print("Running oracle judge on DOS-RAG + MMR...")
+    for arm in ("dosrag", "mmr"):
+        df_j = judge_df(df_j, f"{arm}_response", f"{arm}_judge", client)
+    df_j.to_csv(judged_path, index=False)
+    print(f"Saved: {judged_path}")
+
+    nums = {}
+    print(f"\n{'Arm':12s}  {'Overall':>8}  {'Middle':>8}  {'Edge':>8}")
+    for arm in ("dosrag", "mmr"):
+        jcol = f"{arm}_judge"
+        if jcol not in df_j.columns:
+            continue
+        ov, mid, edg = summarise(df_j, jcol)
+        nums[arm] = (ov, mid, edg)
+        print(f"  {arm:10s}  {ov:8.1f}%  {mid:8.1f}%  {edg:8.1f}%")
+    return nums
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -286,9 +327,10 @@ def main():
 
     v5 = process_v5(client, patch)
     ll2 = process_llmlingua2(client, patch)
+    drm = process_dosrag_mmr(client)
 
-    if v5 is None and ll2 is None:
-        print("\nNeither experiment has results yet. Re-run after Modal jobs complete.")
+    if v5 is None and ll2 is None and drm is None:
+        print("\nNo experiments have results yet. Re-run after Modal jobs complete.")
     elif patch:
         print("\nAll available tables patched. Re-run 'latexmk -pdf paper.tex' to rebuild PDF.")
 

@@ -77,6 +77,14 @@ zip -j "$ZIP" \
   figures/exp3_mapreduce_judged.csv \
   figures/exp3_failure_summary.txt
 
+# Add DOS-RAG/MMR results if available (completed after initial submission)
+for f in figures/exp3_dosrag_mmr_results_judged.csv figures/exp3_nli_thresh_sweep.csv; do
+  if [ -f "$REPO_ROOT/$f" ]; then
+    zip -j "$ZIP" "$REPO_ROOT/$f"
+    echo "  Added: $f"
+  fi
+done
+
 echo ""
 echo "Created: $ZIP"
 unzip -l "$ZIP" | awk '/files$/{print $NF, "files,", $(NF-2), "bytes total"}' || true

@@ -2110,3 +2110,236 @@ def run_llmlingua2_entrypoint():
     h = run_llmlingua2_baseline.spawn(records)
     print(f"Spawned: {h.object_id}")
     print(f"Collect: modal volume get clinical-litm-results exp3_llmlingua2_results.csv {LOCAL_FIGURES}/exp3_llmlingua2_results.csv")
+
+
+# ── Experiment 3 DOS-RAG + MMR: structure-preserving and diversified retrieval ─
+#
+# Addresses reviewer requests for:
+#   (a) DOS RAG — reorder BM25 top-k hits by original EHR temporal (document) order,
+#       testing whether temporal structure preservation improves context utility.
+#   (b) MMR — Maximal Marginal Relevance (Carbonell & Goldstein, 1998) balances
+#       query relevance vs. inter-sentence redundancy.
+#
+# Both arms use the same Qwen2.5-7B-Instruct reader as the primary evaluation.
+# Output: /results/exp3_dosrag_mmr_results.csv
+#
+# Run: modal run --detach modal_app.py::run_dosrag_mmr_entrypoint
+
+llm_image_dosrag_mmr = (
+    modal.Image.debian_slim(python_version="3.12")
+    .pip_install([
+        "torch==2.3.0", "transformers==4.41.0", "accelerate",
+        "bitsandbytes", "pandas", "numpy", "sentencepiece",
+        "pyarrow", "rank-bm25", "scikit-learn", "sentence-transformers",
+    ])
+    .add_local_dir(str(EXPERIMENTS_DIR), remote_path="/experiments")
+)
+
+
+@app.function(
+    gpu="A100",
+    timeout=14400,   # 4 hours — 2 arms × 83 records at 7B
+    memory=80000,
+    image=llm_image_dosrag_mmr,
+    volumes={"/results": results_vol, "/mnt-data": data_vol},
+)
+def run_dosrag_mmr_fn(records: list[dict],
+                      model_id: str = "Qwen/Qwen2.5-7B-Instruct",
+                      keep_top_k: int = 20,
+                      lambda_mmr: float = 0.5) -> list[dict]:
+    """
+    Two-arm evaluation: BM25-temporal (DOS-RAG) and MMR-diversified retrieval.
+
+    BM25-temporal: BM25 top-k sentences, re-sorted by original EHR temporal
+    order (document-order structure, DOS-RAG variant). Tests whether
+    preserving chronological structure matters beyond relevance ranking.
+
+    MMR: Maximal Marginal Relevance selection — balances query relevance
+    (dense cosine sim) against inter-sentence redundancy to diversify context.
+
+    Output: /results/exp3_dosrag_mmr_results.csv
+    """
+    import os, re, sys, torch
+    import numpy as np
+    import pandas as pd
+    from pathlib import Path as _Path
+    from transformers import AutoTokenizer, AutoModelForCausalLM
+    from rank_bm25 import BM25Okapi
+    from sentence_transformers import SentenceTransformer
+
+    sys.path.insert(0, "/experiments")
+    from exp3_qccs_gate import parse_ehr_sentences, sentences_to_context
+
+    EHR_DIR = _Path("/mnt-data/medalign/MedAlign_files/medalign_instructions_v1_3/ehrs")
+
+    # Sentence encoder on CPU to keep GPU free for the LLM
+    print("Loading sentence encoder (CPU)...")
+    encoder = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
+
+    print(f"Loading {model_id}...")
+    hf_token = os.environ.get("HF_TOKEN")
+    llm_tok = AutoTokenizer.from_pretrained(model_id, token=hf_token)
+    model = AutoModelForCausalLM.from_pretrained(
+        model_id, device_map="auto", torch_dtype=torch.float16, token=hf_token)
+    model.eval()
+    _llm_device = next(model.parameters()).device
+    print(f"Model loaded on {_llm_device}. Processing {len(records)} records (2 arms)...")
+
+    def build_prompt(context, question):
+        return (f"<|im_start|>system\nYou are a clinical assistant.<|im_end|>\n"
+                f"<|im_start|>user\nBased ONLY on the patient record below, "
+                f"answer the question briefly.\n\nPATIENT RECORD:\n{context}\n\n"
+                f"QUESTION: {question}<|im_end|>\n<|im_start|>assistant\n")
+
+    def generate(context, question, ctx_token_limit=4096):
+        torch.cuda.empty_cache()
+        prompt = build_prompt(context, question)
+        inputs = llm_tok(prompt, return_tensors="pt",
+                         truncation=True, max_length=ctx_token_limit).to(_llm_device)
+        with torch.no_grad():
+            out = model.generate(**inputs, max_new_tokens=128, do_sample=False)
+        return llm_tok.decode(out[0][inputs["input_ids"].shape[1]:],
+                              skip_special_tokens=True).strip()
+
+    def score_response(response, expected):
+        r, e = response.lower(), expected.lower()
+        if e in r: return 1.0
+        te = set(re.findall(r'\w+', e)); tr = set(re.findall(r'\w+', r))
+        if te and len(te & tr) / len(te) >= 0.5: return 0.5
+        return 0.0
+
+    def bm25_temporal_compress(events, query, k):
+        """BM25 top-k, re-sorted by original EHR temporal order (DOS-RAG variant)."""
+        recent = {e["idx"] for e in events[-5:]}
+        corpus = [re.findall(r'\w+', e["text"].lower()) for e in events]
+        idx = BM25Okapi(corpus) if any(corpus) else None
+        if idx is None:
+            kept = list(events[-k:])
+        else:
+            qtoks = re.findall(r'\w+', query.lower())
+            scores = idx.get_scores(qtoks) if qtoks else [0.0] * len(events)
+            top_pos = set(sorted(range(len(scores)), key=lambda i: -scores[i])[:k])
+            top_pos |= {i for i, e in enumerate(events) if e["idx"] in recent}
+            kept = [events[i] for i in range(len(events)) if i in top_pos]
+        # Re-sort by original document order (temporal) — this is the DOS-RAG intervention
+        kept.sort(key=lambda e: e["timestamp"])
+        return sentences_to_context(kept)
+
+    def mmr_compress(events, query, k):
+        """MMR-diversified retrieval: balance query relevance vs. redundancy."""
+        texts = [e["text"] for e in events]
+        q_emb = encoder.encode([query], normalize_embeddings=True)
+        ev_embs = encoder.encode(texts, normalize_embeddings=True, batch_size=128)
+        relevance = (ev_embs @ q_emb.T).ravel()
+        recent = {e["idx"] for e in events[-5:]}
+
+        selected = []
+        remaining = list(range(len(events)))
+        while len(selected) < k and remaining:
+            if not selected:
+                best = max(remaining, key=lambda i: relevance[i])
+            else:
+                sel_embs = ev_embs[np.array(selected)]
+                def mmr_score(i, _rel=relevance, _embs=ev_embs, _sel=sel_embs):
+                    sim_to_sel = float((_embs[i:i+1] @ _sel.T).max())
+                    return lambda_mmr * _rel[i] - (1 - lambda_mmr) * sim_to_sel
+                best = max(remaining, key=mmr_score)
+            selected.append(best)
+            remaining.remove(best)
+
+        top_pos = set(selected)
+        top_pos |= {i for i, e in enumerate(events) if e["idx"] in recent}
+        kept = sorted([events[i] for i in top_pos], key=lambda e: e["timestamp"])
+        return sentences_to_context(kept)
+
+    xml_cache = {}
+    def get_events(fname):
+        if fname not in xml_cache:
+            p = EHR_DIR / fname
+            xml_cache[fname] = parse_ehr_sentences(p) if p.exists() else []
+        return xml_cache[fname]
+
+    _partial = _Path("/results/exp3_dosrag_mmr_results.csv")
+    if _partial.exists():
+        ex = pd.read_csv(_partial)
+        ex_valid = ex[ex["dosrag_response"].notna() &
+                      (ex["dosrag_response"].astype(str).str.strip() != "")]
+        results = ex.to_dict("records")
+        done_keys = set(zip(ex_valid["filename"].astype(str),
+                            ex_valid["question"].astype(str).str[:100]))
+        print(f"  Resumed: {len(results)} rows, {len(done_keys)} valid")
+    else:
+        results = []; done_keys = set()
+
+    for i, rec in enumerate(records):
+        fname = rec["filename"]
+        if (fname, str(rec["question"])[:100]) in done_keys: continue
+        if (i + 1) % 10 == 0: print(f"  {i+1}/{len(records)}")
+        events = get_events(fname)
+        if not events: continue
+        q = rec["question"]; exp = rec.get("expected", "")
+        try:
+            ctx_dosrag = bm25_temporal_compress(events, q, keep_top_k)
+            ctx_mmr    = mmr_compress(events, q, keep_top_k)
+            dr = generate(ctx_dosrag, q)
+            mr = generate(ctx_mmr,    q)
+        except Exception as exc:
+            import traceback as _tb
+            print(f"  [ERROR] {fname}: {type(exc).__name__}: {exc}")
+            print(_tb.format_exc()[-500:])
+            dr = mr = ""
+        new_key = (fname, q[:100])
+        results = [r for r in results
+                   if (str(r["filename"]), str(r["question"])[:100]) != new_key]
+        results.append({
+            "filename": fname, "question": q[:100],
+            "position": rec.get("position", float("nan")),
+            "dosrag_correct": score_response(dr, exp),
+            "mmr_correct":    score_response(mr, exp),
+            "dosrag_response": dr[:200],
+            "mmr_response":    mr[:200],
+        })
+        if len(results) % 10 == 0:
+            pd.DataFrame(results).to_csv("/results/exp3_dosrag_mmr_results.csv", index=False)
+            results_vol.commit(); print(f"  [ckpt] {len(results)} rows")
+
+    pd.DataFrame(results).to_csv("/results/exp3_dosrag_mmr_results.csv", index=False)
+    results_vol.commit()
+    print(f"Done. Saved {len(results)} rows to /results/exp3_dosrag_mmr_results.csv")
+    return results
+
+
+@app.local_entrypoint()
+def run_dosrag_mmr_entrypoint():
+    """
+    DOS-RAG (BM25-temporal) + MMR diversification evaluation.
+    Run:     modal run --detach modal_app.py::run_dosrag_mmr_entrypoint
+    Collect: modal volume get clinical-litm-results exp3_dosrag_mmr_results.csv <local_path>
+    Judge:   python experiments/fill_pending_tables.py  (extend for new arms)
+    """
+    import pandas as pd
+    from sklearn.model_selection import train_test_split
+
+    TSV = (LOCAL_ROOT / "data/medalign/MedAlign_files"
+           "/medalign_instructions_v1_3/clinician-reviewed-model-responses.tsv")
+    df = pd.read_csv(TSV, sep="\t").dropna(subset=["question", "evidence", "filename"])
+    _, test_pts = train_test_split(df["filename"].unique(), test_size=0.30, random_state=42)
+    df_test = (df[df["filename"].isin(set(test_pts))]
+               .drop_duplicates(subset=["filename", "question"]))
+    pos_df = pd.read_csv(LOCAL_FIGURES / "exp1_litm_results.csv")
+
+    records = []
+    for _, row in df_test.iterrows():
+        fn = str(row["filename"]); q = str(row["question"])
+        pos_row = pos_df[(pos_df["filename"] == fn) & (pos_df["question"] == q)]
+        records.append({
+            "filename": fn, "question": q,
+            "expected": str(row.get("evidence", "")).strip(),
+            "position": float(pos_row["position"].iloc[0]) if len(pos_row) else float("nan"),
+        })
+
+    print(f"Spawning DOS-RAG + MMR for {len(records)} records (2 arms × {len(records)} calls)...")
+    h = run_dosrag_mmr_fn.spawn(records)
+    print(f"Spawned: {h.object_id}")
+    print(f"Collect: modal volume get clinical-litm-results exp3_dosrag_mmr_results.csv "
+          f"{LOCAL_FIGURES}/exp3_dosrag_mmr_results.csv")

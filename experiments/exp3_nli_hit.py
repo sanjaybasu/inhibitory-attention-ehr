@@ -14,11 +14,13 @@ For each of the 83 test instructions, for each retrieval arm:
   - "Semantic hit" = any retained sentence where max(p_ent_fw, p_ent_bw) > 0.5
 
 Outputs:
-  figures/exp3_nli_hits.csv  — per-instruction semantic hit flags per arm
-  (printed summary: semantic recall by arm, comparison to lexical recall)
+  figures/exp3_nli_hits.csv        — per-instruction binary hit flags at θ=0.5
+  figures/exp3_nli_scores.csv      — per-instruction max NLI scores (raw)
+  figures/exp3_nli_thresh_sweep.csv — hit rates + Stage-2 cond. acc. at 4 thresholds
 
 Usage:
-  python experiments/exp3_nli_hit.py
+  python experiments/exp3_nli_hit.py              # standard run (θ=0.5)
+  python experiments/exp3_nli_hit.py --thresh-sweep  # also run threshold sweep
 
 Runtime: ~30-60 minutes on CPU (83 instructions × ~250 sentences × 2-way NLI).
 """
@@ -74,6 +76,26 @@ def semantic_hit(nli_model: CrossEncoder,
     p_ent_fw = float(scores[0][ENTAIL_IDX])  # P(evidence entails sentence)
     p_ent_bw = float(scores[1][ENTAIL_IDX])  # P(sentence entails evidence)
     return max(p_ent_fw, p_ent_bw) > ENTAIL_THRESH
+
+
+def max_semantic_score(nli_model: CrossEncoder,
+                       sentence_texts: list[str],
+                       evidence: str) -> float:
+    """Return the maximum bidirectional NLI entailment score across all sentences."""
+    best = 0.0
+    e = evidence[:512]
+    for text in sentence_texts:
+        if not text.strip():
+            continue
+        s = text[:512]
+        try:
+            scores = nli_model.predict([(e, s), (s, e)], apply_softmax=True)
+            v = max(float(scores[0][ENTAIL_IDX]), float(scores[1][ENTAIL_IDX]))
+            if v > best:
+                best = v
+        except Exception:
+            pass
+    return best
 
 
 # ── Arm-specific context reconstructors ──────────────────────────────────────
@@ -162,6 +184,8 @@ def get_retained_qccs(events: list[dict], query: str, gate, tok,
 
 
 def main():
+    thresh_sweep = "--thresh-sweep" in sys.argv
+
     print("Loading MedAlign test split...")
     df = pd.read_csv(TSV, sep="\t").dropna(subset=["question", "evidence", "filename"])
     patients = df["filename"].unique()
@@ -238,7 +262,7 @@ def main():
         lex_ce    = int(any(lexical_hit(t, evidence) for t in texts_ce))
         lex_qccs  = int(any(lexical_hit(t, evidence) for t in texts_qccs))
 
-        rows.append({
+        row = {
             "filename": fname, "question": question[:80], "evidence": evidence[:100],
             # Semantic hits
             "bm25_sem":         sem_bm25,
@@ -252,7 +276,14 @@ def main():
             "dense_lex":        lex_dense,
             "ce_lex":           lex_ce,
             "qccs_lex":         lex_qccs,
-        })
+        }
+        if thresh_sweep:
+            # Save per-arm max NLI scores for threshold sensitivity analysis
+            row["bm25_max_score"]  = max_semantic_score(nli_model, texts_bm25,  evidence)
+            row["qccs_max_score"]  = max_semantic_score(nli_model, texts_qccs,  evidence)
+            row["dense_max_score"] = max_semantic_score(nli_model, texts_dense, evidence)
+            row["ce_max_score"]    = max_semantic_score(nli_model, texts_ce,    evidence)
+        rows.append(row)
 
         elapsed = time.time() - t0
         print(f"  {i+1}/{len(df_test)}  ({elapsed:.0f}s)  "
@@ -282,6 +313,50 @@ def main():
     print(f"  BM25 lexical:   {result['bm25_lex'].mean()*100:.1f}%")
     print(f"  QCCS semantic:  {result['qccs_sem'].mean()*100:.1f}%")
     print(f"  QCCS lexical:   {result['qccs_lex'].mean()*100:.1f}%")
+
+    # ── Threshold sweep ──────────────────────────────────────────────────────
+    if thresh_sweep and "bm25_max_score" in result.columns:
+        # Load Stage-2 judge results for conditional accuracy
+        judged_path = FIGURES / "exp3_v4_llm_results_judged.csv"
+        if not judged_path.exists():
+            print("\n[WARN] exp3_v4_llm_results_judged.csv not found; skipping Stage-2 analysis")
+        else:
+            judged = pd.read_csv(judged_path)
+            judged["question_key"] = judged["question"].astype(str).str[:80]
+            result["question_key"] = result["question"].astype(str).str[:80]
+            merged = result.merge(
+                judged[["filename", "question_key", "qccs_judge", "bm25_judge"]],
+                on=["filename", "question_key"], how="inner")
+            print(f"\nMerged {len(merged)} instructions for Stage-2 conditional accuracy")
+
+            sweep_rows = []
+            THRESHOLDS = [0.3, 0.4, 0.5, 0.6]
+            print(f"\n=== NLI Threshold Sensitivity (app:nli_thresh) ===")
+            print(f"{'θ':>5}  {'BM25 hit%':>10}  {'BM25 cond.acc':>14}  "
+                  f"{'QCCS hit%':>10}  {'QCCS cond.acc':>14}")
+            for theta in THRESHOLDS:
+                bm25_hit  = (merged["bm25_max_score"]  > theta).astype(int)
+                qccs_hit  = (merged["qccs_max_score"]  > theta).astype(int)
+                bm25_hr   = bm25_hit.mean() * 100
+                qccs_hr   = qccs_hit.mean() * 100
+                bm25_ca = ((merged[bm25_hit == 1]["bm25_judge"] == 1.0).mean() * 100
+                           if bm25_hit.sum() > 0 else float("nan"))
+                qccs_ca = ((merged[qccs_hit == 1]["qccs_judge"] == 1.0).mean() * 100
+                           if qccs_hit.sum() > 0 else float("nan"))
+                print(f"  {theta:.1f}  {bm25_hr:>9.1f}%  {bm25_ca:>13.1f}%  "
+                      f"{qccs_hr:>9.1f}%  {qccs_ca:>13.1f}%")
+                sweep_rows.append({
+                    "theta": theta,
+                    "bm25_sem_hit_pct": round(bm25_hr, 1),
+                    "bm25_cond_acc_pct": round(bm25_ca, 1) if not np.isnan(bm25_ca) else None,
+                    "qccs_sem_hit_pct": round(qccs_hr, 1),
+                    "qccs_cond_acc_pct": round(qccs_ca, 1) if not np.isnan(qccs_ca) else None,
+                })
+
+            sweep_df = pd.DataFrame(sweep_rows)
+            sweep_out = FIGURES / "exp3_nli_thresh_sweep.csv"
+            sweep_df.to_csv(sweep_out, index=False)
+            print(f"\nSaved: {sweep_out}")
 
 
 if __name__ == "__main__":
