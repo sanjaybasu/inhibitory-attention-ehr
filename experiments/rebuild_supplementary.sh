@@ -49,7 +49,9 @@ zip -j "$ZIP" \
   experiments/exp2_ehrshot_diffattn.py \
   experiments/exp2_qccs_diffattn.py \
   experiments/exp2_qccs_diffattn_focal.py \
+  experiments/exp2_sparse_attn.py \
   experiments/exp3_extended_baselines.py \
+  experiments/exp3_gate_ablations.py \
   experiments/exp3_llm_judge.py \
   experiments/exp3_nli_hit.py \
   experiments/exp3_nooracle_judge.py \
@@ -77,8 +79,9 @@ zip -j "$ZIP" \
   figures/exp3_mapreduce_judged.csv \
   figures/exp3_failure_summary.txt
 
-# Add DOS-RAG/MMR results if available (completed after initial submission)
-for f in figures/exp3_dosrag_mmr_results_judged.csv figures/exp3_nli_thresh_sweep.csv; do
+# Add post-submission results if available
+for f in figures/exp3_dosrag_mmr_results_judged.csv figures/exp3_nli_thresh_sweep.csv \
+         figures/exp3_gate_ablations.csv figures/exp2_sparse_attn_results.csv; do
   if [ -f "$REPO_ROOT/$f" ]; then
     zip -j "$ZIP" "$REPO_ROOT/$f"
     echo "  Added: $f"
