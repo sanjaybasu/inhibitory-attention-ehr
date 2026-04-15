@@ -1,0 +1,13 @@
+task,attn,auroc,auprc,attn_sparsity
+lab_anemia,softmax,0.7753,0.864,0.0001
+lab_hyperkalemia,softmax,0.6316,0.0423,0.0045
+lab_hyponatremia,softmax,0.604,0.3573,0.0001
+lab_thrombocytopenia,softmax,0.7564,0.6337,0.0
+lab_anemia,entmax15,0.7871,0.8799,0.983
+lab_hyperkalemia,entmax15,0.6323,0.0481,0.9904
+lab_hyponatremia,entmax15,0.6107,0.3635,0.9867
+lab_thrombocytopenia,entmax15,0.756,0.6306,0.9827
+lab_anemia,sparsemax,0.7897,0.8893,0.9921
+lab_hyperkalemia,sparsemax,0.6093,0.0389,0.9942
+lab_hyponatremia,sparsemax,0.6127,0.363,0.9946
+lab_thrombocytopenia,sparsemax,0.7518,0.6496,0.9919
