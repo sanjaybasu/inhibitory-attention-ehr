@@ -91,7 +91,6 @@ python experiments/analyze_results.py
                Characterizing and Mitigating Lost-in-the-Middle Effects
                in {EHR} Processing},
   author    = {Basu, Sanjay},
-  note      = {Under review, 2026},
   year      = {2026}
 }
 ```
