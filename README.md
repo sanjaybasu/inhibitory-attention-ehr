@@ -2,7 +2,7 @@
 
 Code for: **"Inhibitory Attention for Clinical Long-Context Reasoning: Characterizing and Mitigating Lost-in-the-Middle Effects in EHR Processing"**
 
-Sanjay Basu (Waymark Care / UCSF), Sadiq Patel (Waymark Care / UPenn)
+Sanjay Basu (Waymark Care / UCSF)
 
 *Under review, 2026*
 
@@ -92,7 +92,7 @@ python experiments/analyze_results.py
   title     = {Inhibitory Attention for Clinical Long-Context Reasoning:
                Characterizing and Mitigating Lost-in-the-Middle Effects
                in {EHR} Processing},
-  author    = {Basu, Sanjay and Patel, Sadiq},
+  author    = {Basu, Sanjay},
   note      = {Under review, 2026},
   year      = {2026}
 }
