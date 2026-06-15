@@ -2,9 +2,7 @@
 
 Code for: **"Inhibitory Attention for Clinical Long-Context Reasoning: Characterizing and Mitigating Lost-in-the-Middle Effects in EHR Processing"**
 
-Sanjay Basu (Waymark Care / UCSF)
 
-*Under review, 2026*
 
 ---
 
